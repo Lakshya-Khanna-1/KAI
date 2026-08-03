@@ -200,16 +200,23 @@ async def run_agent_loop(
     if facts:
         facts_summary = "\n".join([f"- {f.subject} {f.predicate}: {f.value}" for f in facts])
 
-    # 5. Build system prompt with rolling summary & facts
     combo_extra = []
     if ctx.get("summary"):
         combo_extra.append(f"Conversation Summary:\n{ctx['summary']}")
     if extra_context:
         combo_extra.append(extra_context)
 
+    from app.modules.onboarding import service as onboarding_service
+    profile_data = onboarding_service.get_profile_dict(db)
+    onboarding_state = onboarding_service.get_or_create_onboarding_state(db)
+    unasked_topics = onboarding_service.get_unasked_topics(db)
+
     system_prompt = build_system_prompt(
         extra_context="\n\n".join(combo_extra) if combo_extra else None,
-        facts_summary=facts_summary
+        facts_summary=facts_summary,
+        profile_data=profile_data,
+        onboarding_phase=onboarding_state.phase,
+        unasked_topics=unasked_topics
     )
 
     messages_payload: List[Dict[str, Any]] = [{"role": "system", "content": system_prompt}]
@@ -349,16 +356,23 @@ async def stream_agent_loop(
     if facts:
         facts_summary = "\n".join([f"- {f.subject} {f.predicate}: {f.value}" for f in facts])
 
-    # 5. Build system prompt with rolling summary & facts
     combo_extra = []
     if ctx.get("summary"):
         combo_extra.append(f"Conversation Summary:\n{ctx['summary']}")
     if extra_context:
         combo_extra.append(extra_context)
 
+    from app.modules.onboarding import service as onboarding_service
+    profile_data = onboarding_service.get_profile_dict(db)
+    onboarding_state = onboarding_service.get_or_create_onboarding_state(db)
+    unasked_topics = onboarding_service.get_unasked_topics(db)
+
     system_prompt = build_system_prompt(
         extra_context="\n\n".join(combo_extra) if combo_extra else None,
-        facts_summary=facts_summary
+        facts_summary=facts_summary,
+        profile_data=profile_data,
+        onboarding_phase=onboarding_state.phase,
+        unasked_topics=unasked_topics
     )
 
     messages_payload: List[Dict[str, Any]] = [{"role": "system", "content": system_prompt}]
