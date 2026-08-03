@@ -134,6 +134,38 @@
       if (btn) btn.addEventListener('click', (e) => { e.preventDefault(); startOnboardingInterview(); });
     });
 
+    // Memory buttons
+    const btnSearchMemory = el('btn-search-memory');
+    if (btnSearchMemory) {
+      btnSearchMemory.addEventListener('click', (e) => {
+        e.preventDefault();
+        const input = el('memory-search-input');
+        loadMemoryFacts(input ? input.value : '');
+      });
+    }
+    const btnRefreshMemory = el('btn-refresh-memory');
+    if (btnRefreshMemory) btnRefreshMemory.addEventListener('click', (e) => { e.preventDefault(); loadMemoryFacts(); });
+
+    // Roadmap buttons
+    const btnPreviewRoadmap = el('btn-preview-roadmap');
+    if (btnPreviewRoadmap) btnPreviewRoadmap.addEventListener('click', (e) => { e.preventDefault(); previewRoadmap(); });
+
+    const btnImportRoadmap = el('btn-import-roadmap');
+    if (btnImportRoadmap) btnImportRoadmap.addEventListener('click', (e) => { e.preventDefault(); previewRoadmap(); });
+
+    const btnRefreshRoadmap = el('btn-refresh-roadmap');
+    if (btnRefreshRoadmap) btnRefreshRoadmap.addEventListener('click', (e) => { e.preventDefault(); loadActiveRoadmap(); });
+
+    // Modal buttons
+    const btnCloseModal = el('btn-close-modal');
+    if (btnCloseModal) btnCloseModal.addEventListener('click', (e) => { e.preventDefault(); closeRoadmapModal(); });
+
+    const btnCancelModal = el('btn-cancel-modal');
+    if (btnCancelModal) btnCancelModal.addEventListener('click', (e) => { e.preventDefault(); closeRoadmapModal(); });
+
+    const btnConfirmModal = el('btn-confirm-modal');
+    if (btnConfirmModal) btnConfirmModal.addEventListener('click', (e) => { e.preventDefault(); confirmImportRoadmap(); });
+
     // Theme toggle
     const btnThemeToggle = el('btn-theme-toggle');
     if (btnThemeToggle) {
@@ -174,11 +206,203 @@
 
     if (viewName === 'tasks') loadTasks();
     if (viewName === 'reminders') loadReminders();
+    if (viewName === 'memory') loadMemoryFacts();
+    if (viewName === 'roadmap') loadActiveRoadmap();
     if (viewName === 'settings') {
       fetchSystemHealth();
       loadProfileInSettings();
     }
   }
+
+  // Memory View Functions
+  async function loadMemoryFacts(query = '') {
+    const list = el('memory-facts-list');
+    if (!list) return;
+    try {
+      let resp;
+      if (query.trim()) {
+        resp = await apiFetch('/memory/search', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ query: query.trim() })
+        });
+      } else {
+        resp = await apiFetch('/memory');
+      }
+      const facts = await resp.json();
+      if (!facts || facts.length === 0) {
+        list.innerHTML = '<div class="empty-state">No facts or memories found.</div>';
+        return;
+      }
+      list.innerHTML = '';
+      facts.forEach((f) => {
+        const isSuperseded = !!f.superseded_by;
+        const card = document.createElement('div');
+        card.className = 'item-card';
+        if (isSuperseded) card.style.opacity = '0.5';
+        card.innerHTML = `
+          <div>
+            <div class="item-title">${escapeHtml(f.subject)} ${escapeHtml(f.predicate)} = "${escapeHtml(f.value)}"</div>
+            <div class="item-meta">Created: ${f.created_at ? new Date(f.created_at).toLocaleString() : 'N/A'} ${isSuperseded ? '| [SUPERSEDED]' : ''}</div>
+          </div>
+          ${!isSuperseded ? `<button class="btn-secondary" onclick="forgetFact('${f.id}')">Forget</button>` : ''}
+        `;
+        list.appendChild(card);
+      });
+    } catch (err) {
+      list.innerHTML = `<div class="empty-state">Error loading memory: ${err.message}</div>`;
+    }
+  }
+
+  window.forgetFact = async function(factId) {
+    try {
+      await apiFetch('/memory/forget', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ fact_id_or_query: factId })
+      });
+      loadMemoryFacts();
+    } catch (err) {
+      alert('Error forgetting fact: ' + err.message);
+    }
+  };
+
+  // Roadmap View Functions
+  let currentPreviewData = null;
+
+  async function loadActiveRoadmap() {
+    const container = el('active-roadmap-container');
+    if (!container) return;
+    try {
+      const resp = await apiFetch('/roadmap/active');
+      const data = await resp.json();
+      const rm = data.roadmap;
+      if (!rm) {
+        container.innerHTML = '<div class="empty-state">No active roadmap found. Paste one below to import!</div>';
+        return;
+      }
+      let html = `<div style="background: rgba(255,255,255,0.03); border: 1px solid var(--border); border-radius: 12px; padding: 16px;">
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px;">
+          <h3 style="margin: 0;">${escapeHtml(rm.name)}</h3>
+          <span class="badge" style="background: rgba(24,144,255,0.2); color: #1890ff; padding: 4px 8px; border-radius: 12px; font-size: 0.8rem;">Active</span>
+        </div>`;
+
+      rm.phases.forEach((p) => {
+        html += `<div style="margin-top: 14px; border-top: 1px solid rgba(255,255,255,0.1); padding-top: 10px;">
+          <h4 style="margin: 0 0 8px 0; color: var(--accent, #1890ff);">${escapeHtml(p.name)}</h4>`;
+        p.topics.forEach((t) => {
+          const statusIcon = t.status === 'completed' ? '✅' : t.status === 'in_progress' ? '⏳' : '⚪';
+          html += `<div style="display: flex; justify-content: space-between; align-items: center; background: rgba(0,0,0,0.15); padding: 8px 12px; border-radius: 6px; margin-bottom: 6px;">
+            <div>
+              <span>${statusIcon} <strong>${escapeHtml(t.title)}</strong></span>
+              <span style="font-size: 0.8rem; opacity: 0.7; margin-left: 10px;">(${t.hours_done}/${t.est_hours} hrs)</span>
+            </div>
+            <select onchange="updateTopicStatus('${t.id}', this.value)" style="background: var(--bg); color: inherit; border: 1px solid var(--border); border-radius: 4px; padding: 2px 6px; font-size: 0.8rem;">
+              <option value="not_started" ${t.status === 'not_started' ? 'selected' : ''}>Not Started</option>
+              <option value="in_progress" ${t.status === 'in_progress' ? 'selected' : ''}>In Progress</option>
+              <option value="completed" ${t.status === 'completed' ? 'selected' : ''}>Completed</option>
+            </select>
+          </div>`;
+        });
+        html += `</div>`;
+      });
+      html += `</div>`;
+      container.innerHTML = html;
+    } catch (err) {
+      container.innerHTML = `<div class="empty-state">Error loading roadmap: ${err.message}</div>`;
+    }
+  }
+
+  window.updateTopicStatus = async function(topicId, newStatus) {
+    try {
+      await apiFetch('/roadmap/topic/update', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ topic_id: topicId, status: newStatus })
+      });
+      loadActiveRoadmap();
+    } catch (err) {
+      alert('Error updating topic status: ' + err.message);
+    }
+  };
+
+  async function previewRoadmap() {
+    const text = el('roadmap-paste-input').value;
+    if (!text.trim()) { alert('Please paste roadmap text first.'); return; }
+    try {
+      const resp = await apiFetch('/roadmap/preview', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ source_text: text })
+      });
+      const res = await resp.json();
+      currentPreviewData = res.preview;
+      showRoadmapModal(res.preview);
+    } catch (err) {
+      alert('Error previewing roadmap: ' + err.message);
+    }
+  }
+
+  async function confirmImportRoadmap() {
+    const text = el('roadmap-paste-input').value;
+    if (!text.trim()) { alert('Please paste roadmap text first.'); return; }
+    try {
+      const resp = await apiFetch('/roadmap/import', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ source_text: text, confirm: true })
+      });
+      const res = await resp.json();
+      if (res.status === 'success') {
+        alert('Roadmap successfully imported and saved!');
+        closeRoadmapModal();
+        el('roadmap-paste-input').value = '';
+        loadActiveRoadmap();
+      }
+    } catch (err) {
+      alert('Error importing roadmap: ' + err.message);
+    }
+  }
+
+  function showRoadmapModal(preview) {
+    const modal = el('roadmap-modal');
+    const title = el('modal-roadmap-title');
+    const body = el('modal-roadmap-body');
+    if (!modal || !body) return;
+
+    title.textContent = `Preview: ${preview.roadmap_name}`;
+    let html = `<div style="margin-bottom: 12px; font-size: 0.9rem; background: rgba(24,144,255,0.1); padding: 10px; border-radius: 6px;">
+      <strong>Summary:</strong> ${preview.total_phases} Phases | ${preview.total_topics} Topics | ~${preview.total_est_hours} Total Estimated Hours
+    </div>`;
+
+    if (preview.is_reimport && preview.diff) {
+      html += `<div style="margin-bottom: 12px; font-size: 0.85rem; background: rgba(255,193,7,0.1); border: 1px solid rgba(255,193,7,0.3); padding: 8px; border-radius: 6px;">
+        <strong>Diff (Re-import):</strong>
+        <div style="color:#52c41a">+ Added: ${preview.diff.added.join(', ') || 'None'}</div>
+        <div style="color:#1890ff">= Retained (hours kept): ${preview.diff.retained.join(', ') || 'None'}</div>
+        <div style="color:#ff4d4f">- Archived: ${preview.diff.removed.join(', ') || 'None'}</div>
+      </div>`;
+    }
+
+    preview.parsed_tree.phases.forEach((p) => {
+      html += `<div style="margin-top: 10px;">
+        <strong style="color: var(--accent);">${escapeHtml(p.name)}</strong>
+        <ul style="margin: 4px 0 10px 18px; padding: 0; font-size: 0.85rem;">`;
+      p.topics.forEach((t) => {
+        html += `<li>${escapeHtml(t.title)} (${t.est_hours} hrs)</li>`;
+      });
+      html += `</ul></div>`;
+    });
+
+    body.innerHTML = html;
+    modal.style.display = 'flex';
+  }
+
+  function closeRoadmapModal() {
+    const modal = el('roadmap-modal');
+    if (modal) modal.style.display = 'none';
+  }
+
 
   async function startOnboardingInterview() {
     try {

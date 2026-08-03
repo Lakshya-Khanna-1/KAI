@@ -44,6 +44,14 @@
         <span class="nav-icon">⏰</span>
         <span class="nav-label">Reminders</span>
       </button>
+      <button class="nav-btn" data-view="memory">
+        <span class="nav-icon">🧠</span>
+        <span class="nav-label">Memory</span>
+      </button>
+      <button class="nav-btn" data-view="roadmap">
+        <span class="nav-icon">🗺️</span>
+        <span class="nav-label">Roadmap</span>
+      </button>
       <button class="nav-btn" data-view="settings">
         <span class="nav-icon">⚙️</span>
         <span class="nav-label">Settings</span>
@@ -104,6 +112,42 @@
         </div>
       </section>
 
+      <!-- Memory View -->
+      <section id="view-memory" class="view">
+        <div class="section-header">
+          <h2>Permanent Memory & Facts</h2>
+          <button id="btn-refresh-memory" class="icon-btn">🔄</button>
+        </div>
+        <div class="task-input-card">
+          <input type="text" id="memory-search-input" placeholder="Search atomic facts or memories...">
+          <button id="btn-search-memory" class="btn-secondary">Search</button>
+        </div>
+        <div id="memory-facts-list" class="items-list">
+          <div class="empty-state">Loading permanent memories...</div>
+        </div>
+      </section>
+
+      <!-- Roadmap View -->
+      <section id="view-roadmap" class="view">
+        <div class="section-header">
+          <h2>Learning Roadmap</h2>
+          <button id="btn-refresh-roadmap" class="icon-btn">🔄</button>
+        </div>
+        <div id="active-roadmap-container" style="margin-bottom: 20px;">
+          <div class="empty-state">Loading active roadmap...</div>
+        </div>
+        <div class="settings-card">
+          <div class="setting-item">
+            <label>Import / Paste New Roadmap</label>
+            <textarea id="roadmap-paste-input" placeholder="Paste your custom markdown/bullet/text roadmap here..." rows="6" style="width: 100%; border-radius: 8px; border: 1px solid var(--border); padding: 8px; background: rgba(0,0,0,0.2); color: inherit; font-family: inherit; margin-top: 8px;"></textarea>
+            <div style="display: flex; gap: 10px; margin-top: 10px;">
+              <button id="btn-preview-roadmap" class="btn-secondary">🔍 Preview Import</button>
+              <button id="btn-import-roadmap" class="btn-primary">🚀 Import & Save</button>
+            </div>
+          </div>
+        </div>
+      </section>
+
       <!-- Settings View -->
       <section id="view-settings" class="view">
         <div class="section-header">
@@ -141,6 +185,23 @@
     </main>
   </div>
 
-  <script src="/app.js?v=5"></script>
+  <!-- Roadmap Preview Modal -->
+  <div id="roadmap-modal" style="display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.7); z-index: 999; justify-content: center; align-items: center; padding: 20px;">
+    <div style="background: var(--card-bg, #161b22); border: 1px solid var(--border, #30363d); border-radius: 12px; max-width: 600px; width: 100%; max-height: 80vh; display: flex; flex-direction: column; overflow: hidden; box-shadow: 0 10px 30px rgba(0,0,0,0.5);">
+      <div style="padding: 16px; border-bottom: 1px solid var(--border, #30363d); display: flex; justify-content: space-between; align-items: center;">
+        <h3 style="margin: 0;" id="modal-roadmap-title">Roadmap Import Preview</h3>
+        <button id="btn-close-modal" class="icon-btn">❌</button>
+      </div>
+      <div style="padding: 16px; overflow-y: auto; flex: 1;" id="modal-roadmap-body">
+        Loading preview...
+      </div>
+      <div style="padding: 16px; border-top: 1px solid var(--border, #30363d); display: flex; justify-content: flex-end; gap: 10px;">
+        <button id="btn-cancel-modal" class="btn-secondary">Cancel</button>
+        <button id="btn-confirm-modal" class="btn-primary">Confirm & Import</button>
+      </div>
+    </div>
+  </div>
+
+  <script src="/app.js?v=6"></script>
 </body>
 </html>

@@ -8,5 +8,19 @@ from app.db.models.notification import Notification
 from app.db.models.fact import Fact
 from app.db.models.summary import ConversationSummary
 from app.db.models.profile import Profile, OnboardingState
+from app.db.models.roadmap import Roadmap, RoadmapPhase, RoadmapTopic
 
-__all__ = ["Conversation", "Message", "ToolCall", "Setting", "Task", "Reminder", "Notification", "Fact", "ConversationSummary", "Profile", "OnboardingState"]
+__all__ = [
+    "Conversation",
+    "Message",
+    "ConversationSummary",
+    "Task",
+    "Reminder",
+    "Fact",
+    "ToolCall",
+    "Profile",
+    "OnboardingState",
+    "Roadmap",
+    "RoadmapPhase",
+    "RoadmapTopic",
+]

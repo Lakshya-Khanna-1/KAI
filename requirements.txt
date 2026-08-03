@@ -10,3 +10,4 @@ python-dotenv
 pytest
 python-dateutil
 tzdata
+qdrant-client

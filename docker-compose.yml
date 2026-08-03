@@ -6,11 +6,27 @@ services:
       - "8088:8000"
     env_file:
       - .env
+    environment:
+      - QDRANT_HOST=qdrant
+      - QDRANT_PORT=6333
     volumes:
       - kai_data:/data
     extra_hosts:
       - "host.docker.internal:host-gateway"
+    depends_on:
+      - qdrant
+    restart: unless-stopped
+
+  qdrant:
+    image: qdrant/qdrant:latest
+    container_name: kai_qdrant
+    ports:
+      - "6333:6333"
+      - "6334:6334"
+    volumes:
+      - qdrant_data:/qdrant/storage
     restart: unless-stopped
 
 volumes:
   kai_data:
+  qdrant_data:

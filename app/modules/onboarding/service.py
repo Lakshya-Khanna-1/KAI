@@ -18,7 +18,8 @@ ONBOARDING_TOPICS = [
     "dietary_notes",
     "communication_style",
     "motivation",
-    "annoyances"
+    "annoyances",
+    "learning_roadmap"
 ]
 
 def now_utc():

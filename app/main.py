@@ -10,6 +10,15 @@ from app.logging_config import setup_logging
 VERSION = "0.1.0"
 
 
+async def _nightly_fact_job():
+    _db = SessionLocal()
+    try:
+        from app.services.memory import run_nightly_fact_extraction
+        await run_nightly_fact_extraction(_db)
+    finally:
+        _db.close()
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     setup_logging()
@@ -40,6 +49,14 @@ async def lifespan(app: FastAPI):
         func=perform_db_backup,
         job_id="job_nightly_db_backup",
         trigger=CronTrigger(hour=2, minute=0),
+        replace_existing=True
+    )
+
+    # Register nightly atomic fact extraction job at 3:00 AM UTC
+    register_job(
+        func=_nightly_fact_job,
+        job_id="job_nightly_fact_extraction",
+        trigger=CronTrigger(hour=3, minute=0),
         replace_existing=True
     )
 

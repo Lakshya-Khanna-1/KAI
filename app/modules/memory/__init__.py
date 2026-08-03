@@ -1,1 +1,1 @@
-# Memory module package
+# Memory module initialization

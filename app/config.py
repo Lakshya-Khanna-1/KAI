@@ -13,6 +13,8 @@ class Settings(BaseSettings):
     NTFY_TOPIC: str = ""
     API_TOKEN: str = ""
     LOG_LEVEL: str = "INFO"
+    QDRANT_HOST: str = "localhost"
+    QDRANT_PORT: int = 6333
 
     model_config = SettingsConfigDict(
         env_file=".env",
