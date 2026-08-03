@@ -9,6 +9,7 @@ from app.db.models.fact import Fact
 from app.db.models.summary import ConversationSummary
 from app.db.models.profile import Profile, OnboardingState
 from app.db.models.roadmap import Roadmap, RoadmapPhase, RoadmapTopic
+from app.db.models.gym import Workout, ExerciseSet, BodyMetric, ExercisePR
 
 __all__ = [
     "Conversation",
@@ -23,4 +24,8 @@ __all__ = [
     "Roadmap",
     "RoadmapPhase",
     "RoadmapTopic",
+    "Workout",
+    "ExerciseSet",
+    "BodyMetric",
+    "ExercisePR",
 ]

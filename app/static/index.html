@@ -52,6 +52,10 @@
         <span class="nav-icon">🗺️</span>
         <span class="nav-label">Roadmap</span>
       </button>
+      <button class="nav-btn" data-view="gym">
+        <span class="nav-icon">💪</span>
+        <span class="nav-label">Gym</span>
+      </button>
       <button class="nav-btn" data-view="settings">
         <span class="nav-icon">⚙️</span>
         <span class="nav-label">Settings</span>
@@ -144,6 +148,48 @@
               <button id="btn-preview-roadmap" class="btn-secondary">🔍 Preview Import</button>
               <button id="btn-import-roadmap" class="btn-primary">🚀 Import & Save</button>
             </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- Gym View -->
+      <section id="view-gym" class="view">
+        <div class="section-header">
+          <h2>Gym & Body Tracking</h2>
+          <button id="btn-refresh-gym" class="icon-btn">🔄</button>
+        </div>
+        
+        <div class="settings-card" style="margin-bottom: 16px;">
+          <div class="setting-item">
+            <label>⚡ Fast Workout Logging</label>
+            <div style="font-size: 0.8rem; opacity: 0.7; margin-bottom: 6px;">Type conversational sets e.g. <code>bench 3x8 at 60</code> or <code>squat 100kg 5x5</code></div>
+            <textarea id="gym-sets-input" placeholder="e.g.&#10;bench 3x8 at 60&#10;incline bench 3x10 at 50&#10;overhead press 3x8 at 40" rows="4" style="width: 100%; border-radius: 8px; border: 1px solid var(--border); padding: 8px; background: rgba(0,0,0,0.2); color: inherit; font-family: inherit; margin-top: 4px;"></textarea>
+            <div style="display: flex; gap: 10px; margin-top: 8px;">
+              <input type="text" id="gym-split-input" placeholder="Split (e.g. Push)" style="flex: 1; padding: 6px; border-radius: 6px; border: 1px solid var(--border); background: var(--bg); color: inherit;">
+              <button id="btn-log-workout" class="btn-primary">💪 Log Workout</button>
+            </div>
+          </div>
+          <div class="setting-item" style="margin-top: 14px;">
+            <label>⚖️ Log Body Weight</label>
+            <div style="display: flex; gap: 10px; margin-top: 6px;">
+              <input type="number" step="0.1" id="gym-body-weight" placeholder="Weight (kg)" style="flex: 1; padding: 6px; border-radius: 6px; border: 1px solid var(--border); background: var(--bg); color: inherit;">
+              <input type="number" step="0.1" id="gym-body-fat" placeholder="Body Fat % (optional)" style="flex: 1; padding: 6px; border-radius: 6px; border: 1px solid var(--border); background: var(--bg); color: inherit;">
+              <button id="btn-log-body" class="btn-secondary">Log Weight</button>
+            </div>
+          </div>
+        </div>
+
+        <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 16px;">
+          <!-- PRs Card -->
+          <div style="background: rgba(255,255,255,0.03); border: 1px solid var(--border); border-radius: 12px; padding: 16px;">
+            <h3 style="margin-top: 0;">🏆 Personal Records (1RM)</h3>
+            <div id="gym-prs-list">Loading PRs...</div>
+          </div>
+
+          <!-- Weekly Volume Card -->
+          <div style="background: rgba(255,255,255,0.03); border: 1px solid var(--border); border-radius: 12px; padding: 16px;">
+            <h3 style="margin-top: 0;">📊 Weekly Volume (kg)</h3>
+            <div id="gym-volume-list">Loading weekly volume...</div>
           </div>
         </div>
       </section>

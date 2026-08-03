@@ -110,7 +110,121 @@
     const btnRefreshReminders = el('btn-refresh-reminders');
     if (btnRefreshReminders) btnRefreshReminders.addEventListener('click', (e) => { e.preventDefault(); loadReminders(); });
 
-    // Settings buttons
+    // Gym View Logic
+  async function loadGymStats() {
+    const prsContainer = el('gym-prs-list');
+    const volContainer = el('gym-volume-list');
+    if (!prsContainer || !volContainer) return;
+
+    prsContainer.innerHTML = '<div class="empty-state">Loading PRs...</div>';
+    volContainer.innerHTML = '<div class="empty-state">Loading volume...</div>';
+
+    try {
+      const resp = await apiFetch('/gym/stats');
+      const data = await resp.json();
+      const stats = data.stats || {};
+
+      // Render PRs
+      if (!stats.prs || stats.prs.length === 0) {
+        prsContainer.innerHTML = '<div class="empty-state">No PRs recorded yet. Log a workout to start!</div>';
+      } else {
+        prsContainer.innerHTML = '';
+        stats.prs.forEach((pr) => {
+          const item = document.createElement('div');
+          item.style.padding = '8px 0';
+          item.style.borderBottom = '1px solid rgba(255,255,255,0.05)';
+          item.innerHTML = `
+            <div style="font-weight: 600; text-transform: capitalize; color: var(--accent);">${escapeHtml(pr.exercise)}</div>
+            <div style="font-size: 0.85rem; opacity: 0.8;">
+              ${pr.best_weight} kg × ${pr.best_reps} reps | <strong>Est 1RM: ${pr.est_1rm} kg</strong>
+            </div>
+          `;
+          prsContainer.appendChild(item);
+        });
+      }
+
+      // Render Weekly Volume
+      if (!stats.weekly_volume) {
+        volContainer.innerHTML = '<div class="empty-state">No volume logged this week.</div>';
+      } else {
+        volContainer.innerHTML = '';
+        Object.entries(stats.weekly_volume).forEach(([group, vol]) => {
+          if (vol > 0) {
+            const item = document.createElement('div');
+            item.style.display = 'flex';
+            item.style.justifyContent = 'space-between';
+            item.style.padding = '6px 0';
+            item.style.borderBottom = '1px solid rgba(255,255,255,0.05)';
+            item.innerHTML = `<span>${group}</span><strong style="color: var(--accent);">${vol} kg</strong>`;
+            volContainer.appendChild(item);
+          }
+        });
+        if (!volContainer.innerHTML) {
+          volContainer.innerHTML = '<div class="empty-state">0 kg logged in the past 7 days.</div>';
+        }
+      }
+    } catch (err) {
+      if (prsContainer) prsContainer.innerHTML = `<div class="empty-state" style="color: var(--danger)">Error: ${escapeHtml(err.message)}</div>`;
+    }
+  }
+
+  async function logWorkoutFromUI() {
+    const textEl = el('gym-sets-input');
+    const splitEl = el('gym-split-input');
+    if (!textEl || !textEl.value.trim()) {
+      alert('Please enter sets to log (e.g. bench 3x8 at 60).');
+      return;
+    }
+
+    try {
+      const resp = await apiFetch('/gym/workout', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          split_name: (splitEl && splitEl.value.trim()) ? splitEl.value.trim() : 'Push/Pull/Legs',
+          sets_text: textEl.value.trim()
+        })
+      });
+      const data = await resp.json();
+      textEl.value = '';
+      let msg = `Logged workout successfully!`;
+      if (data.workout && data.workout.pr_notifications && data.workout.pr_notifications.length > 0) {
+        msg += `\n🎉 ${data.workout.pr_notifications.length} NEW PR(S) DETECTED!`;
+      }
+      alert(msg);
+      loadGymStats();
+    } catch (err) {
+      alert('Failed to log workout: ' + err.message);
+    }
+  }
+
+  async function logBodyWeightFromUI() {
+    const weightEl = el('gym-body-weight');
+    const fatEl = el('gym-body-fat');
+    if (!weightEl || !weightEl.value) {
+      alert('Please enter weight in kg.');
+      return;
+    }
+
+    try {
+      await apiFetch('/gym/body', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          weight_kg: parseFloat(weightEl.value),
+          body_fat_pct: fatEl.value ? parseFloat(fatEl.value) : null
+        })
+      });
+      alert(`Logged body weight: ${weightEl.value} kg`);
+      weightEl.value = '';
+      if (fatEl) fatEl.value = '';
+      loadGymStats();
+    } catch (err) {
+      alert('Failed to log weight: ' + err.message);
+    }
+  }
+
+  // Settings & System Functions
     const btnSaveToken = el('btn-save-token');
     if (btnSaveToken) {
       btnSaveToken.addEventListener('click', (e) => {
@@ -166,6 +280,16 @@
     const btnConfirmModal = el('btn-confirm-modal');
     if (btnConfirmModal) btnConfirmModal.addEventListener('click', (e) => { e.preventDefault(); confirmImportRoadmap(); });
 
+    // Gym buttons
+    const btnLogWorkout = el('btn-log-workout');
+    if (btnLogWorkout) btnLogWorkout.addEventListener('click', (e) => { e.preventDefault(); logWorkoutFromUI(); });
+
+    const btnLogBody = el('btn-log-body');
+    if (btnLogBody) btnLogBody.addEventListener('click', (e) => { e.preventDefault(); logBodyWeightFromUI(); });
+
+    const btnRefreshGym = el('btn-refresh-gym');
+    if (btnRefreshGym) btnRefreshGym.addEventListener('click', (e) => { e.preventDefault(); loadGymStats(); });
+
     // Theme toggle
     const btnThemeToggle = el('btn-theme-toggle');
     if (btnThemeToggle) {
@@ -208,6 +332,7 @@
     if (viewName === 'reminders') loadReminders();
     if (viewName === 'memory') loadMemoryFacts();
     if (viewName === 'roadmap') loadActiveRoadmap();
+    if (viewName === 'gym') loadGymStats();
     if (viewName === 'settings') {
       fetchSystemHealth();
       loadProfileInSettings();
