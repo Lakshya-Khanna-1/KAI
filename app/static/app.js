@@ -324,12 +324,22 @@
       tasks.forEach((t) => {
         const card = document.createElement('div');
         card.className = 'item-card';
+        const dueStr = t.due_at ? new Date(t.due_at).toLocaleString([], { dateStyle: 'short', timeStyle: 'short' }) : null;
+        const metaParts = [];
+        if (dueStr) metaParts.push(`📅 Due: ${dueStr}`);
+        metaParts.push(`Priority: ${t.priority}`);
+        if (t.recurrence_rule) metaParts.push(`🔁 ${t.recurrence_rule}`);
+
         card.innerHTML = `
-          <div>
+          <div style="flex: 1;">
             <div class="item-title">${escapeHtml(t.title)}</div>
-            <div class="item-meta">Priority: ${t.priority} | Status: ${t.status}</div>
+            <div class="item-meta">${metaParts.join(' | ')}</div>
+            ${t.notes ? `<div style="font-size: 0.82rem; color: var(--text-muted); margin-top: 4px;">${escapeHtml(t.notes)}</div>` : ''}
           </div>
-          <button class="btn-secondary" onclick="completeTask('${t.id}')">Done</button>
+          <div style="display: flex; gap: 6px; align-items: center;">
+            <button class="btn-secondary" style="background: rgba(82, 196, 26, 0.15); color: #52c41a; border-color: rgba(82, 196, 26, 0.3);" onclick="completeTask('${t.id}')">✓ Done</button>
+            <button class="btn-secondary" style="background: rgba(255, 77, 79, 0.15); color: #ff4d4f; border-color: rgba(255, 77, 79, 0.3);" onclick="deleteTask('${t.id}')">🗑️</button>
+          </div>
         `;
         tasksList.appendChild(card);
       });
@@ -358,10 +368,24 @@
 
   window.completeTask = async function (taskId) {
     try {
-      await apiFetch(`/tasks/${taskId}/complete`, { method: 'POST' });
+      const resp = await apiFetch(`/tasks/${taskId}/complete`, { method: 'POST' });
+      const completedTask = await resp.json();
+      if (completedTask.recurrence_rule) {
+        console.log('Recurring task completed. Next instance scheduled.');
+      }
       loadTasks();
     } catch (err) {
       alert('Error completing task: ' + err.message);
+    }
+  };
+
+  window.deleteTask = async function (taskId) {
+    if (!confirm('Are you sure you want to delete this task?')) return;
+    try {
+      await apiFetch(`/tasks/${taskId}`, { method: 'DELETE' });
+      loadTasks();
+    } catch (err) {
+      alert('Error deleting task: ' + err.message);
     }
   };
 
