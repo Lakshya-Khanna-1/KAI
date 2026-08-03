@@ -129,15 +129,24 @@ body {
   background: var(--bg-secondary);
   border-bottom: 1px solid var(--border-color);
   padding: 4px;
+  overflow-x: auto;
+  scrollbar-width: none; /* Firefox */
+  -webkit-overflow-scrolling: touch;
+}
+
+.app-nav::-webkit-scrollbar {
+  display: none; /* Safari/Chrome */
 }
 
 .nav-btn {
   flex: 1;
+  min-width: 56px;
+  flex-shrink: 0;
   background: transparent;
   border: none;
   color: var(--text-secondary);
-  padding: 10px 0;
-  font-size: 0.85rem;
+  padding: 8px 4px;
+  font-size: 0.8rem;
   font-weight: 500;
   cursor: pointer;
   display: flex;
