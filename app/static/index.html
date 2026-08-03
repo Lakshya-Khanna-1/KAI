@@ -25,6 +25,7 @@
         </div>
       </div>
       <div class="header-actions">
+        <button id="btn-start-onboarding" class="icon-btn-text" style="background: rgba(24, 144, 255, 0.15); color: #1890ff; border: 1px solid rgba(24, 144, 255, 0.3); border-radius: 20px; padding: 4px 12px; font-size: 0.82rem; font-weight: 500; display: flex; align-items: center; gap: 6px; cursor: pointer;" title="Start Onboarding Interview">🎙️ Interview Me</button>
         <button id="btn-theme-toggle" class="icon-btn" title="Toggle Theme">🌙</button>
       </div>
     </header>
@@ -61,6 +62,9 @@
             </div>
             <div class="msg-content">
               Welcome back. I am connected and ready. What can I do for you today?
+              <div style="margin-top: 10px;">
+                <button id="btn-welcome-onboarding" class="btn-primary" style="width: auto; font-size: 0.85rem; padding: 6px 14px; background: linear-gradient(135deg, #1890ff, #722ed1); border: none;">🎙️ Start Onboarding Interview</button>
+              </div>
             </div>
           </div>
         </div>
@@ -107,6 +111,15 @@
         </div>
         <div class="settings-card">
           <div class="setting-item">
+            <label>Profile & Onboarding</label>
+            <div style="margin-top: 6px;">
+              <button id="btn-settings-onboarding" class="btn-secondary" style="margin-bottom: 8px;">🎙️ Start / Re-run Onboarding Interview</button>
+              <div id="user-profile-box" class="info-box" style="font-size: 0.85rem; max-height: 160px; overflow-y: auto;">
+                Loading profile facts...
+              </div>
+            </div>
+          </div>
+          <div class="setting-item">
             <label for="api-token-input">API Token Auth</label>
             <div class="token-input-group">
               <input type="password" id="api-token-input" placeholder="Enter API Token (if set in .env)">
@@ -128,6 +141,6 @@
     </main>
   </div>
 
-  <script src="/app.js?v=4"></script>
+  <script src="/app.js?v=5"></script>
 </body>
 </html>

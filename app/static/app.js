@@ -128,6 +128,12 @@
     const btnSubPush = el('btn-sub-push');
     if (btnSubPush) btnSubPush.addEventListener('click', (e) => { e.preventDefault(); requestPushPermission(); });
 
+    // Onboarding buttons
+    ['btn-start-onboarding', 'btn-welcome-onboarding', 'btn-settings-onboarding'].forEach((id) => {
+      const btn = el(id);
+      if (btn) btn.addEventListener('click', (e) => { e.preventDefault(); startOnboardingInterview(); });
+    });
+
     // Theme toggle
     const btnThemeToggle = el('btn-theme-toggle');
     if (btnThemeToggle) {
@@ -144,6 +150,12 @@
       if (navBtn) {
         const view = navBtn.getAttribute('data-view');
         if (view) switchView(view);
+      }
+
+      const obBtn = e.target.closest('#btn-start-onboarding, #btn-welcome-onboarding, #btn-settings-onboarding');
+      if (obBtn) {
+        e.preventDefault();
+        startOnboardingInterview();
       }
     });
   }
@@ -162,7 +174,44 @@
 
     if (viewName === 'tasks') loadTasks();
     if (viewName === 'reminders') loadReminders();
-    if (viewName === 'settings') fetchSystemHealth();
+    if (viewName === 'settings') {
+      fetchSystemHealth();
+      loadProfileInSettings();
+    }
+  }
+
+  async function startOnboardingInterview() {
+    try {
+      await apiFetch('/onboarding', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'reset' })
+      });
+      switchView('chat');
+      const chatInput = el('chat-input');
+      if (chatInput) {
+        chatInput.value = "Hi KAI, let's start the onboarding interview so you can get to know me!";
+        sendMessage();
+      }
+    } catch (err) {
+      alert('Error starting onboarding interview: ' + err.message);
+    }
+  }
+
+  async function loadProfileInSettings() {
+    const box = el('user-profile-box');
+    if (!box) return;
+    try {
+      const resp = await apiFetch('/onboarding/profile');
+      const prof = await resp.json();
+      if (!prof || Object.keys(prof).length === 0) {
+        box.innerHTML = '<i>No profile facts saved yet. Click "Start Onboarding Interview" to begin!</i>';
+        return;
+      }
+      box.innerHTML = Object.entries(prof).map(([k, v]) => `<div style="padding: 2px 0;"><strong>${escapeHtml(k)}:</strong> ${escapeHtml(String(v))}</div>`).join('');
+    } catch (err) {
+      box.innerHTML = `<span style="color:red">Error loading profile: ${err.message}</span>`;
+    }
   }
 
   // API Fetch Helper with Authorization
