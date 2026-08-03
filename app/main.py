@@ -1,0 +1,110 @@
+from contextlib import asynccontextmanager
+from fastapi import FastAPI
+from sqlalchemy import text
+from app.db.session import SessionLocal
+from app.llm.client import ollama_client
+from app.llm.registry import discover_routers
+
+from app.logging_config import setup_logging
+
+VERSION = "0.1.0"
+
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    setup_logging()
+    from app.services.scheduler import init_scheduler, register_job
+    from app.services.notify import process_retry_queue
+    from app.services.backup import perform_db_backup
+    from app.modules.reminders.service import check_missed_reminders
+    from apscheduler.triggers.interval import IntervalTrigger
+    from apscheduler.triggers.cron import CronTrigger
+
+    init_scheduler()
+    db = SessionLocal()
+    try:
+        await check_missed_reminders(db)
+    finally:
+        db.close()
+
+    # Register background notification retry queue runner every 1 minute
+    register_job(
+        func=process_retry_queue,
+        job_id="job_notification_retry_queue",
+        trigger=IntervalTrigger(minutes=1),
+        replace_existing=True
+    )
+
+    # Register nightly DB backup job at 2:00 AM UTC
+    register_job(
+        func=perform_db_backup,
+        job_id="job_nightly_db_backup",
+        trigger=CronTrigger(hour=2, minute=0),
+        replace_existing=True
+    )
+
+    yield
+
+
+def create_app() -> FastAPI:
+    from fastapi.staticfiles import StaticFiles
+    from app.api.chat import router as chat_router
+
+    app = FastAPI(title="KAI Assistant API", version=VERSION, lifespan=lifespan)
+
+    # Include explicit API routers
+    app.include_router(chat_router)
+
+    # Auto-register module routers
+    routers = discover_routers()
+    for r in routers:
+        app.include_router(r)
+
+    @app.get("/health")
+    async def health_check():
+        db_status = "ok"
+        try:
+            db = SessionLocal()
+            db.execute(text("SELECT 1"))
+            db.close()
+        except Exception as e:
+            db_status = f"error: {str(e)}"
+
+        ollama_reachable = await ollama_client.check_reachability()
+
+        status = "ok" if db_status == "ok" else "degraded"
+
+        return {
+            "version": VERSION,
+            "status": status,
+            "database": db_status,
+            "ollama": {
+                "reachable": ollama_reachable
+            }
+        }
+
+    @app.get("/models")
+    async def list_models():
+        models = await ollama_client.list_models()
+        return {"models": models}
+
+    # Serve PWA index.html at root /
+    import os
+    from fastapi.responses import FileResponse
+    static_dir = os.path.join(os.path.dirname(__file__), "static")
+
+    @app.get("/")
+    async def read_index():
+        index_path = os.path.join(static_dir, "index.html")
+        if os.path.exists(index_path):
+            return FileResponse(index_path)
+        return {"message": "KAI API running"}
+
+    # Mount static assets for css, js, sw.js, manifest.json
+    if os.path.exists(static_dir):
+        app.mount("/", StaticFiles(directory=static_dir, html=True), name="static")
+
+    return app
+
+
+app = create_app()
