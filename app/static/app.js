@@ -1407,9 +1407,11 @@
     const bufferLength = state.analyser.frequencyBinCount;
     const dataArray = new Uint8Array(bufferLength);
 
-    const SILENCE_THRESHOLD = 5; // Out of 255
-    const MAX_SILENCE_MS = 6000; // 6 seconds before auto-stop
+    const SILENCE_THRESHOLD = 3; // Sensitive enough for normal speech & whispers
+    const MAX_SILENCE_MS = 2500; // 2.5 seconds pause triggers instant processing
+    const MAX_WAIT_MS = 12000; // Absolute max wait if user clicks but never speaks
     let lastSpokeTime = Date.now();
+    let startTime = Date.now();
     let hasSpoken = false;
 
     function renderFrame() {
@@ -1433,14 +1435,23 @@
 
       // Voice Activity Detection (VAD)
       const avgVolume = sum / bufferLength;
+      
       if (avgVolume > SILENCE_THRESHOLD) {
         hasSpoken = true;
         lastSpokeTime = Date.now();
-      } else if (hasSpoken && (Date.now() - lastSpokeTime > MAX_SILENCE_MS)) {
-        if (state.mediaRecorder && state.mediaRecorder.state === 'recording') {
-          console.log('[VAD] Silence detected for 6 seconds. Auto-stopping recording.');
-          state.mediaRecorder.stop();
-          hasSpoken = false; // Reset for next iteration
+      } else {
+        if (hasSpoken && (Date.now() - lastSpokeTime > MAX_SILENCE_MS)) {
+          if (state.mediaRecorder && state.mediaRecorder.state === 'recording') {
+            console.log(`[VAD] ${MAX_SILENCE_MS}ms of silence detected. Stopping to process voice.`);
+            state.mediaRecorder.stop();
+            hasSpoken = false;
+          }
+        } else if (!hasSpoken && (Date.now() - startTime > MAX_WAIT_MS)) {
+           // User activated mic but never spoke a word for 12 seconds.
+           if (state.mediaRecorder && state.mediaRecorder.state === 'recording') {
+            console.log('[VAD] No speech detected for 12 seconds. Aborting listen loop.');
+            state.mediaRecorder.stop();
+          }
         }
       }
     }
