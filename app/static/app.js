@@ -1384,10 +1384,14 @@
           }
         };
 
-        await sendAudioToSTT(audioBlob, onTranscriptionAndSpeechDone);
+        if (state.audioChunks.length > 0) {
+           await sendAudioToSTT(audioBlob, onTranscriptionAndSpeechDone);
+        } else {
+           onTranscriptionAndSpeechDone();
+        }
       };
 
-      state.mediaRecorder.start();
+      state.mediaRecorder.start(250); // Timeslice 250ms ensures chunks are populated reliably on mobile
     } catch (err) {
       console.warn('Microphone stream error:', err);
       if (waveformStatus) waveformStatus.textContent = 'Mic error: ' + (err.message || 'Blocked');
@@ -1486,6 +1490,9 @@
   }
 
   async function convertWebmToWav(blob) {
+    if (!blob || blob.size === 0) {
+      throw new Error('Empty audio stream received.');
+    }
     const arrayBuffer = await blob.arrayBuffer();
     const audioContext = new (window.AudioContext || window.webkitAudioContext)();
     const audioBuffer = await audioContext.decodeAudioData(arrayBuffer);
@@ -1534,6 +1541,12 @@
   async function sendAudioToSTT(audioBlob, onComplete) {
     const chatInput = el('chat-input');
     try {
+      if (audioBlob.size < 100) {
+        console.warn('Audio blob too small, parsing as silent abort. Ignoring.');
+        if (onComplete) onComplete();
+        return;
+      }
+      
       const wavBlob = await convertWebmToWav(audioBlob);
       const formData = new FormData();
       formData.append('file', wavBlob, 'speech.wav');
