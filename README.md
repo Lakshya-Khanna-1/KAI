@@ -33,3 +33,12 @@ A self-hosted, private, Jarvis-style personal AI assistant running locally on ho
    ```bash
    pytest
    ```
+
+## Features Complete in V1 Framework (Tasks 1-15)
+- Fully offline native LLM operations via local Ollama
+- Full-duplex Voice Interaction Mode using `whisper.cpp` & Piper TTS
+- PWA Mobile Frontend (accessible on-the-go via Tailscale)
+- RAG "Permanent Memory" vector store via Qdrant
+- Gym & Progressive Overload Tracking with automatic PB notifications
+- Live dynamic web searching capabilities and Roadmap planning tools
+- Intelligent background scheduler + automated task completion
