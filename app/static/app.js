@@ -1358,7 +1358,7 @@
         state.analyser = state.audioContext.createAnalyser();
         const source = state.audioContext.createMediaStreamSource(stream);
         source.connect(state.analyser);
-        state.analyser.fftSize = 64;
+        state.analyser.fftSize = 256;
         drawWaveformCanvas(canvas);
       }
 
@@ -1407,9 +1407,15 @@
     const bufferLength = state.analyser.frequencyBinCount;
     const dataArray = new Uint8Array(bufferLength);
 
-    const SILENCE_THRESHOLD = 3; // Sensitive enough for normal speech & whispers
     const MAX_SILENCE_MS = 2500; // 2.5 seconds pause triggers instant processing
     const MAX_WAIT_MS = 12000; // Absolute max wait if user clicks but never speaks
+    
+    // Dynamic Noise Gate Params
+    let noiseFloor = 255;
+    const VOICE_BIN_START = 2; // ~375Hz 
+    const VOICE_BIN_END = 18;  // ~3400Hz (core human vocal range)
+    const VAD_SENSITIVITY_MARGIN = 15; // Requires 15 units above ambient noise to trigger
+    
     let lastSpokeTime = Date.now();
     let startTime = Date.now();
     let hasSpoken = false;
@@ -1418,38 +1424,59 @@
       state.animFrameId = requestAnimationFrame(renderFrame);
       state.analyser.getByteFrequencyData(dataArray);
 
-      let sum = 0;
       ctx.clearRect(0, 0, canvas.width, canvas.height);
 
       const barWidth = (canvas.width / bufferLength) * 1.5;
       let x = 0;
 
+      let voiceEnergySum = 0;
+      let voiceBinsCount = 0;
+
       for (let i = 0; i < bufferLength; i++) {
         const value = dataArray[i];
-        sum += value;
+        
+        // Sum energy exclusively in human vocal frequency bands
+        if (i >= VOICE_BIN_START && i <= VOICE_BIN_END) {
+          voiceEnergySum += value;
+          voiceBinsCount++;
+        }
+
         const barHeight = (value / 255) * canvas.height;
         ctx.fillStyle = `rgb(24, ${Math.min(255, 144 + value)}, 255)`;
         ctx.fillRect(x, canvas.height - barHeight, barWidth - 1, barHeight);
         x += barWidth;
       }
 
-      // Voice Activity Detection (VAD)
-      const avgVolume = sum / bufferLength;
+      // Smart Voice Activity Detection (VAD) via Dynamic Noise Floor
+      const currentVoiceEnergy = voiceEnergySum / (voiceBinsCount || 1);
+      let isSpeakingNow = false;
+
+      // Adapt to ultra-quiet moments instantly
+      if (currentVoiceEnergy < noiseFloor) {
+        noiseFloor = currentVoiceEnergy;
+      } 
+      // Trigger speaking if energy spikes clearly above the steady noise floor
+      else if (currentVoiceEnergy > noiseFloor + VAD_SENSITIVITY_MARGIN) {
+        isSpeakingNow = true;
+      } 
+      // If we are NOT speaking, slowly adapt to rising ambient noise (like a fan turning on)
+      else {
+        noiseFloor += 0.2; 
+      }
       
-      if (avgVolume > SILENCE_THRESHOLD) {
+      if (isSpeakingNow) {
         hasSpoken = true;
         lastSpokeTime = Date.now();
       } else {
         if (hasSpoken && (Date.now() - lastSpokeTime > MAX_SILENCE_MS)) {
           if (state.mediaRecorder && state.mediaRecorder.state === 'recording') {
-            console.log(`[VAD] ${MAX_SILENCE_MS}ms of silence detected. Stopping to process voice.`);
+            console.log(`[VAD] ${MAX_SILENCE_MS}ms silence detected. Dynamic floor: ${noiseFloor.toFixed(1)}. Processing voice.`);
             state.mediaRecorder.stop();
             hasSpoken = false;
           }
         } else if (!hasSpoken && (Date.now() - startTime > MAX_WAIT_MS)) {
-           // User activated mic but never spoke a word for 12 seconds.
            if (state.mediaRecorder && state.mediaRecorder.state === 'recording') {
-            console.log('[VAD] No speech detected for 12 seconds. Aborting listen loop.');
+            console.log('[VAD] No speech detected for 12 seconds. Aborting listen loop to prevent hang.');
             state.mediaRecorder.stop();
           }
         }
