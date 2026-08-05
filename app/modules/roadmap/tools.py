@@ -158,8 +158,7 @@ TOOLS = [
         "function": {
             "name": "get_roadmap",
             "description": "Get the active learning roadmap with all phases, topics, estimated hours, and completion status.",
-            "parameters": {"type": "object", "properties": {}},
-            "handler": handle_get_roadmap
+            "parameters": {"type": "object", "properties": {}}
         },
         "handler": handle_get_roadmap
     },
@@ -187,8 +186,7 @@ TOOLS = [
         "function": {
             "name": "archive_roadmap",
             "description": "Archive the currently active learning roadmap (sets active=false, never deletes).",
-            "parameters": {"type": "object", "properties": {}},
-            "handler": handle_archive_roadmap
+            "parameters": {"type": "object", "properties": {}}
         },
         "handler": handle_archive_roadmap
     }

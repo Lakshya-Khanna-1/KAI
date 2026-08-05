@@ -32,3 +32,6 @@ htmlcov/
 # Logs
 *.log
 logs/
+*.mp4
+*.pem
+*.wav

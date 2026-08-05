@@ -15,6 +15,8 @@ class Settings(BaseSettings):
     LOG_LEVEL: str = "INFO"
     QDRANT_HOST: str = "localhost"
     QDRANT_PORT: int = 6333
+    WHISPER_URL: str = "http://whisper:8080"
+    PIPER_URL: str = "http://piper:5000"
 
     model_config = SettingsConfigDict(
         env_file=".env",

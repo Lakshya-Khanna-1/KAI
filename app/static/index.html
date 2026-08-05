@@ -26,6 +26,7 @@
       </div>
       <div class="header-actions">
         <button id="btn-start-onboarding" class="icon-btn-text" style="background: rgba(24, 144, 255, 0.15); color: #1890ff; border: 1px solid rgba(24, 144, 255, 0.3); border-radius: 20px; padding: 4px 12px; font-size: 0.82rem; font-weight: 500; display: flex; align-items: center; gap: 6px; cursor: pointer;" title="Start Onboarding Interview">🎙️ Interview Me</button>
+        <button id="btn-voice-mode-toggle" class="icon-btn" title="Toggle Voice Mode (Auto-play Audio)" style="background: rgba(255,255,255,0.08); font-size: 1.1rem;">🔊</button>
         <button id="btn-theme-toggle" class="icon-btn" title="Toggle Theme">🌙</button>
       </div>
     </header>
@@ -56,6 +57,14 @@
         <span class="nav-icon">💪</span>
         <span class="nav-label">Gym</span>
       </button>
+      <button class="nav-btn" data-view="schedule">
+        <span class="nav-icon">📅</span>
+        <span class="nav-label">Schedule</span>
+      </button>
+      <button class="nav-btn" data-view="news">
+        <span class="nav-icon">📰</span>
+        <span class="nav-label">News</span>
+      </button>
       <button class="nav-btn" data-view="settings">
         <span class="nav-icon">⚙️</span>
         <span class="nav-label">Settings</span>
@@ -79,14 +88,26 @@
               </div>
             </div>
           </div>
+        <!-- Real-time Voice Waveform Visualizer Floating Banner -->
+        <div id="voice-waveform-container" class="waveform-floating-banner" style="display: none;">
+          <div style="display: flex; align-items: center; gap: 8px; font-size: 0.85rem; font-weight: 500; color: #52c41a;">
+            <span class="recording-pulse" style="width: 10px; height: 10px; border-radius: 50%; background: #52c41a; display: inline-block; box-shadow: 0 0 8px #52c41a;"></span>
+            <span id="voice-waveform-status">Listening... Speak to KAI</span>
+          </div>
+          <canvas id="voice-waveform-canvas" width="160" height="28" style="border-radius: 6px; background: rgba(0,0,0,0.3);"></canvas>
         </div>
 
-        <div class="chat-input-bar">
-          <textarea id="chat-input" placeholder="Type a message or command..." rows="1"></textarea>
-          <button id="btn-send" class="btn-primary">
-            <span>Send</span>
-            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 2L11 13M22 2l-7 20-4-9-9-4 20-7z"/></svg>
-          </button>
+        <div class="chat-input-container">
+          <div class="chat-input-bar">
+            <button id="btn-plus" class="capsule-btn-plus" title="Add / Tools">+</button>
+            <textarea id="chat-input" placeholder="Ask KAI..." rows="1"></textarea>
+            <button id="btn-mic" class="capsule-btn-mic" title="Start Live Voice Mode">
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2a3 3 0 0 0-3 3v7a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2"/><line x1="12" y1="19" x2="12" y2="22"/></svg>
+            </button>
+            <button id="btn-send" class="capsule-btn-send" title="Send Message">
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 2L11 13M22 2l-7 20-4-9-9-4 20-7z"/></svg>
+            </button>
+          </div>
         </div>
       </section>
 
@@ -194,6 +215,76 @@
         </div>
       </section>
 
+      <!-- Schedule View -->
+      <section id="view-schedule" class="view">
+        <div class="section-header">
+          <h2>Adaptive Daily Schedule</h2>
+          <div style="display: flex; gap: 8px;">
+            <button id="btn-generate-plan" class="btn-primary" style="padding: 6px 14px; font-size: 0.85rem;">⚡ Generate Plan</button>
+            <button id="btn-free-windows" class="btn-secondary" style="padding: 6px 14px; font-size: 0.85rem;">🔍 Free Windows</button>
+          </div>
+        </div>
+
+        <!-- Free Windows Banner -->
+        <div id="schedule-free-banner" style="background: rgba(99, 102, 241, 0.1); border: 1px solid rgba(99, 102, 241, 0.3); border-radius: 10px; padding: 12px 16px; margin-bottom: 16px; font-size: 0.9rem; color: #a5b4fc;">
+          Checking free time windows...
+        </div>
+
+        <!-- Schedule Timeline List -->
+        <div style="background: rgba(255,255,255,0.03); border: 1px solid var(--border); border-radius: 12px; padding: 16px; margin-bottom: 20px;">
+          <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px;">
+            <h3 style="margin: 0;" id="schedule-date-title">Today's Schedule</h3>
+            <div style="display: flex; gap: 8px;">
+              <button id="btn-brief-morning" class="btn-secondary" style="padding: 4px 10px; font-size: 0.78rem;">☀️ Morning Brief</button>
+              <button id="btn-brief-evening" class="btn-secondary" style="padding: 4px 10px; font-size: 0.78rem;">🌙 Evening Check-in</button>
+            </div>
+          </div>
+          <div id="schedule-timeline-list">Loading schedule...</div>
+        </div>
+
+        <!-- Add Manual Schedule Block Form -->
+        <div style="background: rgba(255,255,255,0.03); border: 1px solid var(--border); border-radius: 12px; padding: 16px;">
+          <h3 style="margin-top: 0;">➕ Add Schedule Block</h3>
+          <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 12px; margin-bottom: 12px;">
+            <input type="text" id="sched-title-input" class="form-input" placeholder="Title (e.g. Client Call / Deep Work)" />
+            <input type="time" id="sched-start-input" class="form-input" value="14:00" />
+            <input type="time" id="sched-end-input" class="form-input" value="15:00" />
+            <select id="sched-type-input" class="form-input">
+              <option value="routine">Routine</option>
+              <option value="commitment">Commitment</option>
+              <option value="gym">Gym</option>
+              <option value="study">Study</option>
+              <option value="buffer">Buffer</option>
+            </select>
+          </div>
+          <button id="btn-add-schedule-block" class="btn-primary" style="width: 100%;">➕ Add Block to Today</button>
+        </div>
+      </section>
+
+      <!-- News View -->
+      <section id="view-news" class="view">
+        <div class="section-header">
+          <h2>📰 News & Research Digest</h2>
+          <button id="btn-fetch-news" class="btn-primary" style="font-size: 0.85rem;">🔄 Fetch Latest</button>
+        </div>
+        <div class="card" style="margin-bottom: 16px;">
+          <div style="display: flex; gap: 12px; align-items: center; flex-wrap: wrap;">
+            <select id="news-source-filter" style="padding: 6px 12px; background: var(--bg-tertiary, #21262d); border: 1px solid var(--border, #30363d); color: var(--text-primary); border-radius: 6px; font-size: 0.85rem;">
+              <option value="">All Sources</option>
+              <option value="arxiv">arXiv Papers</option>
+              <option value="hacker_news">Hacker News</option>
+              <option value="huggingface">HuggingFace Papers</option>
+            </select>
+            <label style="display: flex; align-items: center; gap: 6px; font-size: 0.85rem; cursor: pointer;">
+              <input type="checkbox" id="news-saved-filter"> Saved for Later Only
+            </label>
+          </div>
+        </div>
+        <div id="news-container" class="card-list" style="display: flex; flex-direction: column; gap: 12px;">
+          <div class="info-box">Loading news items...</div>
+        </div>
+      </section>
+
       <!-- Settings View -->
       <section id="view-settings" class="view">
         <div class="section-header">
@@ -219,6 +310,15 @@
           <div class="setting-item">
             <label>Push Notifications</label>
             <button id="btn-sub-push" class="btn-primary">Enable Web Push</button>
+          </div>
+          <div class="setting-item">
+            <label for="voice-mode-checkbox" style="display: flex; justify-content: space-between; align-items: center; cursor: pointer;">
+              <div>
+                <strong>Voice Mode (Auto-play response audio)</strong>
+                <div style="font-size: 0.78rem; opacity: 0.7; font-weight: normal;">Automatically speak KAI's responses using local Piper TTS</div>
+              </div>
+              <input type="checkbox" id="voice-mode-checkbox" style="width: 20px; height: 20px; cursor: pointer;">
+            </label>
           </div>
           <div class="setting-item">
             <label>System Info</label>
@@ -248,6 +348,6 @@
     </div>
   </div>
 
-  <script src="/app.js?v=7"></script>
+  <script src="/app.js?v=8"></script>
 </body>
 </html>

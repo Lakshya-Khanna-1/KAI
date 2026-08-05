@@ -10,6 +10,8 @@ from app.db.models.summary import ConversationSummary
 from app.db.models.profile import Profile, OnboardingState
 from app.db.models.roadmap import Roadmap, RoadmapPhase, RoadmapTopic
 from app.db.models.gym import Workout, ExerciseSet, BodyMetric, ExercisePR
+from app.db.models.schedule import ScheduleBlock, AvailabilityRule
+from app.db.models.news import NewsItem
 
 __all__ = [
     "Conversation",
@@ -28,4 +30,7 @@ __all__ = [
     "ExerciseSet",
     "BodyMetric",
     "ExercisePR",
+    "ScheduleBlock",
+    "AvailabilityRule",
+    "NewsItem",
 ]

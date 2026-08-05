@@ -1,4 +1,4 @@
-const CACHE_NAME = 'kai-pwa-v2';
+const CACHE_NAME = 'kai-pwa-v6';
 const STATIC_ASSETS = [
   '/',
   '/index.html',

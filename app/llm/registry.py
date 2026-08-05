@@ -56,7 +56,8 @@ class ToolRegistry:
         for item in discovered:
             if not isinstance(item, dict) or "function" not in item:
                 continue
-            fn_def = item["function"]
+            fn_def = dict(item["function"])
+            fn_def.pop("handler", None)
             name = fn_def.get("name")
             handler = item.get("handler")
             if name and handler:

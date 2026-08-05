@@ -109,18 +109,26 @@ async def send_notification(
     ntfy_pri = map_priority(priority)
     tag_list = ",".join(tags or ["kai"])
 
+    def _safe_header(text: str) -> str:
+        try:
+            text.encode("ascii")
+            return text
+        except UnicodeEncodeError:
+            import email.header
+            return email.header.Header(text, "utf-8").encode()
+
     headers = {
-        "Title": title,
+        "Title": _safe_header(title),
         "Priority": ntfy_pri,
         "Tags": tag_list,
     }
 
     if click_url:
-        headers["Click"] = click_url
+        headers["Click"] = _safe_header(click_url)
 
     actions_header = build_ntfy_actions(entity_type=entity_type, entity_id=entity_id)
     if actions_header:
-        headers["Actions"] = actions_header
+        headers["Actions"] = _safe_header(actions_header)
 
     try:
         async with httpx.AsyncClient(timeout=10.0) as client:

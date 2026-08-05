@@ -22,7 +22,14 @@
     conversationId: localStorage.getItem('kai_conv_id') || generateUUID(),
     apiToken: localStorage.getItem('kai_api_token') || '',
     activeView: 'chat',
-    isStreaming: false
+    isStreaming: false,
+    voiceMode: localStorage.getItem('kai_voice_mode') === 'true',
+    currentAudio: null,
+    mediaRecorder: null,
+    audioChunks: [],
+    audioContext: null,
+    analyser: null,
+    animFrameId: null
   };
 
   localStorage.setItem('kai_conv_id', state.conversationId);
@@ -40,6 +47,8 @@
 
     registerServiceWorker();
     setupEventListeners();
+    updateVoiceModeUI();
+    setupVoiceRecorderUI();
 
     const tokenInput = el('api-token-input');
     if (tokenInput && state.apiToken) {
@@ -224,6 +233,143 @@
     }
   }
 
+  // Schedule View Logic
+  async function loadSchedule() {
+    const timelineList = el('schedule-timeline-list');
+    const freeBanner = el('schedule-free-banner');
+    if (!timelineList) return;
+
+    timelineList.innerHTML = '<div class="empty-state">Loading schedule...</div>';
+    loadFreeWindowsUI();
+
+    try {
+      const resp = await apiFetch('/schedule/today');
+      const data = await resp.json();
+      const blocks = data.blocks || [];
+
+      if (blocks.length === 0) {
+        timelineList.innerHTML = '<div class="empty-state">No blocks scheduled for today. Click <strong>⚡ Generate Plan</strong> to create one!</div>';
+        return;
+      }
+
+      timelineList.innerHTML = '';
+      blocks.forEach((b) => {
+        const item = document.createElement('div');
+        item.style.display = 'flex';
+        item.style.alignItems = 'center';
+        item.style.justifyContent = 'space-between';
+        item.style.padding = '10px 12px';
+        item.style.marginBottom = '8px';
+        item.style.background = 'rgba(255,255,255,0.03)';
+        item.style.borderLeft = b.locked ? '4px solid var(--accent)' : '4px solid var(--warning)';
+        item.style.borderRadius = '6px';
+
+        const isDone = b.status === 'completed';
+        item.innerHTML = `
+          <div style="display: flex; align-items: center; gap: 10px;">
+            <input type="checkbox" ${isDone ? 'checked' : ''} onchange="toggleScheduleBlockStatus('${b.id}', '${b.status}')" style="width: 18px; height: 18px; cursor: pointer;" />
+            <div>
+              <div style="font-weight: 600; ${isDone ? 'text-decoration: line-through; opacity: 0.6;' : ''}">${escapeHtml(b.title)}</div>
+              <div style="font-size: 0.8rem; opacity: 0.7;">
+                ${b.start} – ${b.end} | <span style="text-transform: capitalize;">${b.type}</span> ${b.locked ? '(Locked)' : ''}
+              </div>
+            </div>
+          </div>
+          <span style="font-size: 0.75rem; padding: 2px 8px; border-radius: 12px; background: rgba(255,255,255,0.08);">${b.status}</span>
+        `;
+        timelineList.appendChild(item);
+      });
+    } catch (err) {
+      if (timelineList) timelineList.innerHTML = `<div class="empty-state" style="color: var(--danger)">Error: ${escapeHtml(err.message)}</div>`;
+    }
+  }
+
+  async function loadFreeWindowsUI() {
+    const freeBanner = el('schedule-free-banner');
+    if (!freeBanner) return;
+    try {
+      const resp = await apiFetch('/schedule/free');
+      const data = await resp.json();
+      freeBanner.innerHTML = `💡 <strong>Free Time:</strong> ${escapeHtml(data.human_readable)}`;
+    } catch (err) {
+      freeBanner.innerHTML = 'Unable to calculate free windows.';
+    }
+  }
+
+  async function generateDailyPlanUI() {
+    try {
+      const resp = await apiFetch('/schedule/plan', { method: 'POST' });
+      const data = await resp.json();
+      alert(`Plan generated! Total ${data.plan.total_blocks} blocks scheduled for tomorrow.`);
+      loadSchedule();
+    } catch (err) {
+      alert('Failed to generate plan: ' + err.message);
+    }
+  }
+
+  async function addScheduleBlockFromUI() {
+    const titleEl = el('sched-title-input');
+    const startEl = el('sched-start-input');
+    const endEl = el('sched-end-input');
+    const typeEl = el('sched-type-input');
+
+    if (!titleEl || !titleEl.value.trim()) {
+      alert('Please enter a title for the block.');
+      return;
+    }
+
+    try {
+      await apiFetch('/schedule/block', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          title: titleEl.value.trim(),
+          start_time: startEl.value,
+          end_time: endEl.value,
+          block_type: typeEl.value
+        })
+      });
+      titleEl.value = '';
+      loadSchedule();
+    } catch (err) {
+      alert('Failed to add schedule block: ' + err.message);
+    }
+  }
+
+  async function triggerMorningBriefUI() {
+    try {
+      const resp = await apiFetch('/schedule/briefing/morning', { method: 'POST' });
+      const data = await resp.json();
+      alert(data.message_sent);
+    } catch (err) {
+      alert('Failed to send morning brief: ' + err.message);
+    }
+  }
+
+  async function triggerEveningCheckinUI() {
+    try {
+      const resp = await apiFetch('/schedule/briefing/evening', { method: 'POST' });
+      const data = await resp.json();
+      alert(data.message_sent);
+    } catch (err) {
+      alert('Failed to send evening check-in: ' + err.message);
+    }
+  }
+
+  window.toggleScheduleBlockStatus = async function(blockId, currentStatus) {
+    const newStatus = currentStatus === 'completed' ? 'scheduled' : 'completed';
+    try {
+      await apiFetch(`/schedule/block/${blockId}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ status: newStatus })
+      });
+      loadSchedule();
+    } catch (err) {
+      alert('Failed to update status: ' + err.message);
+    }
+  };
+
   // Settings & System Functions
     const btnSaveToken = el('btn-save-token');
     if (btnSaveToken) {
@@ -290,6 +436,48 @@
     const btnRefreshGym = el('btn-refresh-gym');
     if (btnRefreshGym) btnRefreshGym.addEventListener('click', (e) => { e.preventDefault(); loadGymStats(); });
 
+    // Schedule buttons
+    const btnGenPlan = el('btn-generate-plan');
+    if (btnGenPlan) btnGenPlan.addEventListener('click', (e) => { e.preventDefault(); generateDailyPlanUI(); });
+
+    const btnFreeWin = el('btn-free-windows');
+    if (btnFreeWin) btnFreeWin.addEventListener('click', (e) => { e.preventDefault(); loadFreeWindowsUI(); });
+
+    const btnBriefMorn = el('btn-brief-morning');
+    if (btnBriefMorn) btnBriefMorn.addEventListener('click', (e) => { e.preventDefault(); triggerMorningBriefUI(); });
+
+    const btnBriefEve = el('btn-brief-evening');
+    if (btnBriefEve) btnBriefEve.addEventListener('click', (e) => { e.preventDefault(); triggerEveningCheckinUI(); });
+
+    const btnAddSched = el('btn-add-schedule-block');
+    if (btnAddSched) btnAddSched.addEventListener('click', (e) => { e.preventDefault(); addScheduleBlockFromUI(); });
+
+    // News buttons
+    const btnFetchNews = el('btn-fetch-news');
+    if (btnFetchNews) btnFetchNews.addEventListener('click', (e) => { e.preventDefault(); fetchLatestNewsUI(); });
+
+    const srcFilter = el('news-source-filter');
+    if (srcFilter) srcFilter.addEventListener('change', () => loadNews());
+
+    const savedFilter = el('news-saved-filter');
+    if (savedFilter) savedFilter.addEventListener('change', () => loadNews());
+
+    // Voice mode toggles
+    const btnVoiceToggle = el('btn-voice-mode-toggle');
+    if (btnVoiceToggle) {
+      btnVoiceToggle.addEventListener('click', (e) => {
+        e.preventDefault();
+        setVoiceMode(!state.voiceMode);
+      });
+    }
+
+    const chkVoiceSettings = el('voice-mode-checkbox');
+    if (chkVoiceSettings) {
+      chkVoiceSettings.addEventListener('change', (e) => {
+        setVoiceMode(e.target.checked);
+      });
+    }
+
     // Theme toggle
     const btnThemeToggle = el('btn-theme-toggle');
     if (btnThemeToggle) {
@@ -333,6 +521,8 @@
     if (viewName === 'memory') loadMemoryFacts();
     if (viewName === 'roadmap') loadActiveRoadmap();
     if (viewName === 'gym') loadGymStats();
+    if (viewName === 'schedule') loadSchedule();
+    if (viewName === 'news') loadNews();
     if (viewName === 'settings') {
       fetchSystemHealth();
       loadProfileInSettings();
@@ -582,13 +772,19 @@
   }
 
   // Chat Streaming Logic
-  async function sendMessage() {
+  async function sendMessage(onComplete = null) {
     const chatInput = el('chat-input');
     const btnSend = el('btn-send');
     if (!chatInput) return;
 
     const text = chatInput.value.trim();
-    if (!text || state.isStreaming) return;
+    if (!text || state.isStreaming) {
+      if (onComplete) onComplete();
+      return;
+    }
+
+    // Barge-in: stop any current response audio playback
+    stopCurrentAudioPlayback();
 
     chatInput.value = '';
     chatInput.style.height = 'auto';
@@ -602,6 +798,8 @@
     // Create Assistant Message container
     const msgCard = appendMessage('assistant', '');
     const contentDiv = msgCard.querySelector('.msg-content');
+
+    let accumulatedAssistantText = '';
 
     try {
       const resp = await apiFetch('/api/chat/stream', {
@@ -631,6 +829,9 @@
             if (!dataStr) continue;
             try {
               const event = JSON.parse(dataStr);
+              if (event.type === 'token') {
+                accumulatedAssistantText += event.content || '';
+              }
               handleSSEEvent(event, contentDiv);
             } catch (err) {
               console.warn('Malformed SSE data:', dataStr);
@@ -638,12 +839,20 @@
           }
         }
       }
+
+      // Voice Mode playback with completion callback
+      if ((state.voiceMode || state.continuousVoiceActive) && accumulatedAssistantText.trim()) {
+        playResponseAudio(accumulatedAssistantText, onComplete);
+      } else {
+        if (onComplete) onComplete();
+      }
     } catch (err) {
       console.error('Streaming error:', err);
       contentDiv.innerHTML += `<br><span style="color:var(--danger, #ff4d4f)">Error: ${err.message}</span>`;
       if (err.message.includes('Unauthorized')) {
         switchView('settings');
       }
+      if (onComplete) onComplete();
     } finally {
       state.isStreaming = false;
       if (btnSend) btnSend.disabled = false;
@@ -692,9 +901,12 @@
     const timeStr = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
 
     card.innerHTML = `
-      <div class="msg-header">
-        <span class="sender-name">${role === 'user' ? 'You' : 'KAI'}</span>
-        <span class="msg-time">${timeStr}</span>
+      <div class="msg-header" style="display: flex; justify-content: space-between; align-items: center;">
+        <div>
+          <span class="sender-name">${role === 'user' ? 'You' : 'KAI'}</span>
+          <span class="msg-time">${timeStr}</span>
+        </div>
+        ${role === 'assistant' ? `<button class="icon-btn-text" style="font-size: 0.78rem; padding: 2px 6px; background: rgba(255,255,255,0.06); border-radius: 4px; border: 1px solid var(--border, #30363d); cursor: pointer;" onclick="speakMessageContent(this)">🔊 Speak</button>` : ''}
       </div>
       <div class="msg-content">${escapeHtml(text).replace(/\n/g, '<br>')}</div>
     `;
@@ -826,6 +1038,489 @@
       alert('Error cancelling reminder: ' + err.message);
     }
   };
+
+  // News View Logic
+  async function loadNews() {
+    const container = el('news-container');
+    if (!container) return;
+    container.innerHTML = '<div class="empty-state">Loading news items...</div>';
+
+    const sourceSelect = el('news-source-filter');
+    const savedCheck = el('news-saved-filter');
+
+    const source = sourceSelect ? sourceSelect.value : '';
+    const saved = savedCheck ? savedCheck.checked : false;
+
+    let queryParams = [];
+    if (source) queryParams.push(`source=${encodeURIComponent(source)}`);
+    if (saved) queryParams.push(`saved=true`);
+    const qStr = queryParams.length ? '?' + queryParams.join('&') : '';
+
+    try {
+      const resp = await apiFetch(`/news${qStr}`);
+      const data = await resp.json();
+      const items = data.items || [];
+
+      if (items.length === 0) {
+        container.innerHTML = '<div class="empty-state">No news items found. Click "Fetch Latest" to fetch recent papers & articles!</div>';
+        return;
+      }
+
+      container.innerHTML = '';
+      items.forEach((item) => {
+        const card = document.createElement('div');
+        card.className = 'item-card';
+        card.style.flexDirection = 'column';
+        card.style.alignItems = 'flex-start';
+        card.style.gap = '8px';
+
+        const sourceLabel = item.source.toUpperCase().replace('_', ' ');
+        const scorePct = Math.round((item.relevance_score || 0) * 100);
+        const scoreBadgeColor = scorePct >= 80 ? '#52c41a' : scorePct >= 60 ? '#1890ff' : '#faad14';
+
+        card.innerHTML = `
+          <div style="display: flex; justify-content: space-between; width: 100%; align-items: center;">
+            <div style="display: flex; gap: 8px; align-items: center;">
+              <span style="font-size: 0.72rem; font-weight: 700; padding: 2px 8px; border-radius: 4px; background: rgba(255,255,255,0.1); color: var(--accent);">${sourceLabel}</span>
+              <span style="font-size: 0.72rem; font-weight: 600; padding: 2px 8px; border-radius: 4px; background: rgba(255,255,255,0.05); color: ${scoreBadgeColor};">Score: ${scorePct}%</span>
+            </div>
+            <span style="font-size: 0.75rem; color: var(--text-muted);">${item.published_at}</span>
+          </div>
+          <div style="font-size: 1rem; font-weight: 600; margin-top: 4px;">
+            <a href="${escapeHtml(item.url)}" target="_blank" style="color: var(--text-primary); text-decoration: none; border-bottom: 1px dotted var(--accent);">${escapeHtml(item.title)}</a>
+          </div>
+          <div style="font-size: 0.85rem; color: var(--text-muted); line-height: 1.4;">${escapeHtml(item.summary)}</div>
+          <div style="display: flex; gap: 8px; margin-top: 6px; width: 100%; justify-content: flex-end;">
+            <button class="btn-secondary" style="font-size: 0.78rem;" onclick="explainArticleUI('${item.id}')">💡 Explain Paper</button>
+            <button class="btn-secondary" style="font-size: 0.78rem; background: ${item.saved ? 'rgba(255, 193, 7, 0.2)' : 'transparent'}; color: ${item.saved ? '#ffc107' : 'inherit'};" onclick="toggleSaveArticleUI('${item.id}', ${item.saved})">
+              ${item.saved ? '⭐ Saved' : '☆ Save for Later'}
+            </button>
+          </div>
+        `;
+        container.appendChild(card);
+      });
+    } catch (err) {
+      container.innerHTML = `<div class="empty-state" style="color: var(--danger)">Error: ${escapeHtml(err.message)}</div>`;
+    }
+  }
+
+  async function fetchLatestNewsUI() {
+    const container = el('news-container');
+    if (container) container.innerHTML = '<div class="empty-state">Fetching arXiv papers, Hacker News, & HuggingFace trending papers... Please wait.</div>';
+    try {
+      const resp = await apiFetch('/news/fetch', { method: 'POST' });
+      const res = await resp.json();
+      alert(`Fetched! ${res.new_items_added} new items added. (${res.breaking_alerts_sent} breaking alerts sent)`);
+      loadNews();
+    } catch (err) {
+      alert('Failed to fetch news: ' + err.message);
+      loadNews();
+    }
+  }
+
+  window.toggleSaveArticleUI = async function(itemId, currentSaved) {
+    try {
+      await apiFetch(`/news/${itemId}/save`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ saved: !currentSaved })
+      });
+      loadNews();
+    } catch (err) {
+      alert('Failed to save article: ' + err.message);
+    }
+  };
+
+  window.explainArticleUI = async function(itemId) {
+    try {
+      alert('Generating detailed explanation with KAI... Please wait a few seconds.');
+      const resp = await apiFetch(`/news/${itemId}/explain`, { method: 'POST' });
+      const data = await resp.json();
+      if (data.explanation) {
+        alert(`💡 Paper Explanation for "${data.title}":\n\n${data.explanation}`);
+      } else {
+        alert('Could not generate explanation.');
+      }
+    } catch (err) {
+      alert('Error explaining paper: ' + err.message);
+    }
+  };
+
+  // Voice Subsystem & Audio Functions
+  function stopCurrentAudioPlayback() {
+    if (state.currentAudio) {
+      try {
+        state.currentAudio.pause();
+        state.currentAudio.currentTime = 0;
+      } catch (e) {}
+      state.currentAudio = null;
+    }
+    if (window.speechSynthesis && window.speechSynthesis.speaking) {
+      window.speechSynthesis.cancel();
+    }
+  }
+
+  function updateVoiceModeUI() {
+    const btnToggle = el('btn-voice-mode-toggle');
+    const chkSettings = el('voice-mode-checkbox');
+
+    if (btnToggle) {
+      btnToggle.style.background = state.voiceMode ? 'rgba(24, 144, 255, 0.25)' : 'rgba(255,255,255,0.08)';
+      btnToggle.style.color = state.voiceMode ? '#1890ff' : 'inherit';
+      btnToggle.title = state.voiceMode ? 'Voice Mode ON (Click to Mute)' : 'Voice Mode OFF (Click to Enable Auto-play)';
+      btnToggle.textContent = state.voiceMode ? '🔊' : '🔇';
+    }
+    if (chkSettings) {
+      chkSettings.checked = state.voiceMode;
+    }
+  }
+
+  function setVoiceMode(enabled) {
+    state.voiceMode = enabled;
+    localStorage.setItem('kai_voice_mode', enabled ? 'true' : 'false');
+    updateVoiceModeUI();
+    if (!enabled) stopCurrentAudioPlayback();
+  }
+
+  async function playResponseAudio(text, onComplete = null) {
+    if (!text || !text.trim()) {
+      if (onComplete) onComplete();
+      return;
+    }
+    stopCurrentAudioPlayback();
+
+    const cleanText = text.replace(/[\*\_`#~]/g, '').replace(/\[([^\]]+)\]\([^)]+\)/g, '$1').trim();
+    if (!cleanText) {
+      if (onComplete) onComplete();
+      return;
+    }
+
+    let finished = false;
+    const handleEnd = () => {
+      if (!finished) {
+        finished = true;
+        if (onComplete) onComplete();
+      }
+    };
+
+    try {
+      const resp = await apiFetch(`/voice/tts?text=${encodeURIComponent(cleanText.slice(0, 350))}`);
+      if (resp.ok) {
+        const blob = await resp.blob();
+        const audioUrl = URL.createObjectURL(blob);
+        const audio = new Audio(audioUrl);
+        state.currentAudio = audio;
+        audio.onended = handleEnd;
+        audio.onerror = () => fallbackWebSpeech(cleanText, handleEnd);
+        audio.play().catch((err) => {
+          console.warn('Auto-play audio blocked, fallback to SpeechSynthesis:', err);
+          fallbackWebSpeech(cleanText, handleEnd);
+        });
+        return;
+      }
+    } catch (err) {
+      console.warn('TTS fetch failed, fallback to SpeechSynthesis:', err);
+    }
+
+    fallbackWebSpeech(cleanText, handleEnd);
+  }
+
+  function fallbackWebSpeech(text, onComplete = null) {
+    let finished = false;
+    const handleEnd = () => {
+      if (!finished) {
+        finished = true;
+        if (onComplete) onComplete();
+      }
+    };
+
+    if ('speechSynthesis' in window) {
+      stopCurrentAudioPlayback();
+      const utterance = new SpeechSynthesisUtterance(text.slice(0, 300));
+      utterance.rate = 1.0;
+      utterance.pitch = 1.0;
+      utterance.onend = handleEnd;
+      utterance.onerror = handleEnd;
+      window.speechSynthesis.speak(utterance);
+    } else {
+      handleEnd();
+    }
+  }
+
+  window.speakMessageContent = function(btn) {
+    const card = btn.closest('.message');
+    if (!card) return;
+    const contentDiv = card.querySelector('.msg-content');
+    if (contentDiv) {
+      const text = contentDiv.innerText || contentDiv.textContent;
+      playResponseAudio(text);
+    }
+  };
+
+  // Full-Duplex Continuous Conversational Voice Loop
+  function setupVoiceRecorderUI() {
+    const btnMic = el('btn-mic');
+    if (!btnMic) return;
+
+    btnMic.addEventListener('click', (e) => {
+      e.preventDefault();
+      toggleContinuousVoiceMode();
+    });
+  }
+
+  function toggleContinuousVoiceMode() {
+    const btnMic = el('btn-mic');
+    state.continuousVoiceActive = !state.continuousVoiceActive;
+
+    if (state.continuousVoiceActive) {
+      if (btnMic) btnMic.classList.add('active');
+      startContinuousVoiceLoop();
+    } else {
+      stopContinuousVoiceMode();
+    }
+  }
+
+  function stopContinuousVoiceMode() {
+    state.continuousVoiceActive = false;
+    stopCurrentAudioPlayback();
+    if (state.recognition) {
+      try { state.recognition.abort(); } catch (e) {}
+      state.recognition = null;
+    }
+    stopAudioRecording();
+
+    const btnMic = el('btn-mic');
+    if (btnMic) {
+      btnMic.classList.remove('active');
+      // Reset inline styles that might have been applied before
+      btnMic.style.background = '';
+      btnMic.style.borderColor = '';
+      btnMic.style.color = '';
+      btnMic.title = 'Start Live Voice Mode';
+    }
+
+    const waveformContainer = el('voice-waveform-container');
+    // Only hide if we aren't showing an error
+    const waveformStatus = el('voice-waveform-status');
+    if (waveformStatus && waveformStatus.textContent.includes('error')) {
+      setTimeout(() => { if (waveformContainer) waveformContainer.style.display = 'none'; }, 3000);
+    } else {
+      if (waveformContainer) waveformContainer.style.display = 'none';
+    }
+  }
+
+  async function startContinuousVoiceLoop() {
+    if (!state.continuousVoiceActive) return;
+
+    if (!window.isSecureContext && location.hostname !== 'localhost' && location.hostname !== '127.0.0.1') {
+      alert("Microphone is blocked by Android Chrome on insecure HTTP connections.\n\nTo use Voice Mode over Tailscale:\n1. Open Chrome and go to chrome://flags/#unsafely-treat-insecure-origin-as-secure\n2. Add this IP address to the list.\n3. Relaunch Chrome.\n\nVoice Mode cannot start without this flag.");
+      stopContinuousVoiceMode();
+      return;
+    }
+
+    stopCurrentAudioPlayback();
+
+    const waveformContainer = el('voice-waveform-container');
+    const waveformStatus = el('voice-waveform-status');
+    const canvas = el('voice-waveform-canvas');
+
+    if (waveformContainer) waveformContainer.style.display = 'flex';
+    if (waveformStatus) waveformStatus.textContent = 'Listening... Speak to KAI';
+
+    runMediaRecorderLoop(waveformContainer, waveformStatus, canvas);
+  }
+
+  function getUserMediaStream(constraints) {
+    if (navigator.mediaDevices && typeof navigator.mediaDevices.getUserMedia === 'function') {
+      return navigator.mediaDevices.getUserMedia(constraints);
+    }
+    const legacyFn = navigator.getUserMedia ||
+                     navigator.webkitGetUserMedia ||
+                     navigator.mozGetUserMedia ||
+                     navigator.msGetUserMedia;
+    if (typeof legacyFn === 'function') {
+      return new Promise((resolve, reject) => {
+        legacyFn.call(navigator, constraints, resolve, reject);
+      });
+    }
+    return Promise.reject(new Error('Microphone stream unavailable'));
+  }
+
+  async function runMediaRecorderLoop(waveformContainer, waveformStatus, canvas) {
+    state.audioChunks = [];
+
+    try {
+      const stream = await getUserMediaStream({ audio: true });
+
+      const AudioContext = window.AudioContext || window.webkitAudioContext;
+      if (AudioContext) {
+        state.audioContext = new AudioContext();
+        state.analyser = state.audioContext.createAnalyser();
+        const source = state.audioContext.createMediaStreamSource(stream);
+        source.connect(state.analyser);
+        state.analyser.fftSize = 64;
+        drawWaveformCanvas(canvas);
+      }
+
+      state.mediaRecorder = new MediaRecorder(stream);
+      state.mediaRecorder.ondataavailable = (event) => {
+        if (event.data.size > 0) state.audioChunks.push(event.data);
+      };
+
+      state.mediaRecorder.onstop = async () => {
+        if (state.animFrameId) cancelAnimationFrame(state.animFrameId);
+        if (state.audioContext) state.audioContext.close();
+        stream.getTracks().forEach((t) => t.stop());
+
+        if (waveformStatus) waveformStatus.textContent = 'Transcribing with Whisper...';
+
+        const audioBlob = new Blob(state.audioChunks, { type: 'audio/webm' });
+        
+        const onTranscriptionAndSpeechDone = () => {
+          if (state.continuousVoiceActive) {
+            setTimeout(() => startContinuousVoiceLoop(), 400);
+          } else {
+            if (waveformContainer) waveformContainer.style.display = 'none';
+          }
+        };
+
+        await sendAudioToSTT(audioBlob, onTranscriptionAndSpeechDone);
+      };
+
+      state.mediaRecorder.start();
+    } catch (err) {
+      console.warn('Microphone stream error:', err);
+      if (waveformStatus) waveformStatus.textContent = 'Mic error: ' + (err.message || 'Blocked');
+      stopContinuousVoiceMode();
+    }
+  }
+
+  function stopAudioRecording() {
+    if (state.mediaRecorder && state.mediaRecorder.state !== 'inactive') {
+      state.mediaRecorder.stop();
+    }
+  }
+
+  function drawWaveformCanvas(canvas) {
+    if (!canvas || !state.analyser) return;
+    const ctx = canvas.getContext('2d');
+    const bufferLength = state.analyser.frequencyBinCount;
+    const dataArray = new Uint8Array(bufferLength);
+
+    const SILENCE_THRESHOLD = 5; // Out of 255
+    const MAX_SILENCE_MS = 6000; // 6 seconds before auto-stop
+    let lastSpokeTime = Date.now();
+    let hasSpoken = false;
+
+    function renderFrame() {
+      state.animFrameId = requestAnimationFrame(renderFrame);
+      state.analyser.getByteFrequencyData(dataArray);
+
+      let sum = 0;
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+      const barWidth = (canvas.width / bufferLength) * 1.5;
+      let x = 0;
+
+      for (let i = 0; i < bufferLength; i++) {
+        const value = dataArray[i];
+        sum += value;
+        const barHeight = (value / 255) * canvas.height;
+        ctx.fillStyle = `rgb(24, ${Math.min(255, 144 + value)}, 255)`;
+        ctx.fillRect(x, canvas.height - barHeight, barWidth - 1, barHeight);
+        x += barWidth;
+      }
+
+      // Voice Activity Detection (VAD)
+      const avgVolume = sum / bufferLength;
+      if (avgVolume > SILENCE_THRESHOLD) {
+        hasSpoken = true;
+        lastSpokeTime = Date.now();
+      } else if (hasSpoken && (Date.now() - lastSpokeTime > MAX_SILENCE_MS)) {
+        if (state.mediaRecorder && state.mediaRecorder.state === 'recording') {
+          console.log('[VAD] Silence detected for 6 seconds. Auto-stopping recording.');
+          state.mediaRecorder.stop();
+          hasSpoken = false; // Reset for next iteration
+        }
+      }
+    }
+    renderFrame();
+  }
+
+  async function convertWebmToWav(blob) {
+    const arrayBuffer = await blob.arrayBuffer();
+    const audioContext = new (window.AudioContext || window.webkitAudioContext)();
+    const audioBuffer = await audioContext.decodeAudioData(arrayBuffer);
+    
+    const offlineCtx = new (window.OfflineAudioContext || window.webkitOfflineAudioContext)(1, audioBuffer.duration * 16000, 16000);
+    const source = offlineCtx.createBufferSource();
+    source.buffer = audioBuffer;
+    source.connect(offlineCtx.destination);
+    source.start();
+    const resampledBuffer = await offlineCtx.startRendering();
+
+    const channelData = resampledBuffer.getChannelData(0);
+    const wavBuffer = new ArrayBuffer(44 + channelData.length * 2);
+    const view = new DataView(wavBuffer);
+    
+    const writeString = (view, offset, string) => {
+      for (let i = 0; i < string.length; i++) {
+        view.setUint8(offset + i, string.charCodeAt(i));
+      }
+    };
+    
+    writeString(view, 0, 'RIFF');
+    view.setUint32(4, 36 + channelData.length * 2, true);
+    writeString(view, 8, 'WAVE');
+    writeString(view, 12, 'fmt ');
+    view.setUint32(16, 16, true);
+    view.setUint16(20, 1, true); 
+    view.setUint16(22, 1, true); 
+    view.setUint32(24, 16000, true); 
+    view.setUint32(28, 16000 * 2, true); 
+    view.setUint16(32, 2, true); 
+    view.setUint16(34, 16, true); 
+    writeString(view, 36, 'data');
+    view.setUint32(40, channelData.length * 2, true);
+    
+    let offset = 44;
+    for (let i = 0; i < channelData.length; i++) {
+        let s = Math.max(-1, Math.min(1, channelData[i]));
+        view.setInt16(offset, s < 0 ? s * 0x8000 : s * 0x7FFF, true);
+        offset += 2;
+    }
+    
+    return new Blob([wavBuffer], { type: 'audio/wav' });
+  }
+
+  async function sendAudioToSTT(audioBlob, onComplete) {
+    const chatInput = el('chat-input');
+    try {
+      const wavBlob = await convertWebmToWav(audioBlob);
+      const formData = new FormData();
+      formData.append('file', wavBlob, 'speech.wav');
+
+      const resp = await apiFetch('/voice/stt', {
+        method: 'POST',
+        body: formData
+      });
+
+      const res = await resp.json();
+      if (res.text && res.text.trim() && res.text !== '[Voice recording received]') {
+        const transcribedText = res.text.trim();
+        if (chatInput) {
+          chatInput.value = transcribedText;
+        }
+        sendMessage(onComplete);
+      } else {
+        if (onComplete) onComplete();
+      }
+    } catch (err) {
+      console.error('STT Transcription error:', err);
+      if (chatInput) chatInput.placeholder = 'STT error: ' + err.message;
+      if (onComplete) onComplete();
+    }
+  }
 
   // System Health
   async function fetchSystemHealth(quiet = false) {

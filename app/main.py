@@ -19,6 +19,38 @@ async def _nightly_fact_job():
         _db.close()
 
 
+async def _nightly_schedule_plan_job():
+    _db = SessionLocal()
+    try:
+        from app.modules.schedule.service import generate_daily_plan
+        generate_daily_plan(_db)
+    finally:
+        _db.close()
+
+async def _morning_brief_job():
+    _db = SessionLocal()
+    try:
+        from app.modules.schedule.service import send_morning_brief
+        await send_morning_brief(_db)
+    finally:
+        _db.close()
+
+async def _evening_checkin_job():
+    _db = SessionLocal()
+    try:
+        from app.modules.schedule.service import send_evening_checkin
+        await send_evening_checkin(_db)
+    finally:
+        _db.close()
+
+async def _hourly_news_fetch_job():
+    _db = SessionLocal()
+    try:
+        from app.modules.news.service import fetch_all_news_and_store
+        await fetch_all_news_and_store(_db)
+    finally:
+        _db.close()
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     setup_logging()
@@ -57,6 +89,38 @@ async def lifespan(app: FastAPI):
         func=_nightly_fact_job,
         job_id="job_nightly_fact_extraction",
         trigger=CronTrigger(hour=3, minute=0),
+        replace_existing=True
+    )
+
+    # Register nightly schedule plan generation at 21:00 (9:00 PM) UTC
+    register_job(
+        func=_nightly_schedule_plan_job,
+        job_id="job_nightly_schedule_plan",
+        trigger=CronTrigger(hour=21, minute=0),
+        replace_existing=True
+    )
+
+    # Register morning briefing job at 7:00 AM UTC
+    register_job(
+        func=_morning_brief_job,
+        job_id="job_morning_briefing",
+        trigger=CronTrigger(hour=7, minute=0),
+        replace_existing=True
+    )
+
+    # Register evening check-in job at 21:00 (9:00 PM) UTC
+    register_job(
+        func=_evening_checkin_job,
+        job_id="job_evening_checkin",
+        trigger=CronTrigger(hour=21, minute=0),
+        replace_existing=True
+    )
+
+    # Register hourly news & research fetch job
+    register_job(
+        func=_hourly_news_fetch_job,
+        job_id="job_hourly_news_fetch",
+        trigger=IntervalTrigger(hours=1),
         replace_existing=True
     )
 
