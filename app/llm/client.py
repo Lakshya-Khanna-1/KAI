@@ -105,7 +105,11 @@ class OllamaClient:
             "model": model or self.default_model,
             "messages": messages,
             "stream": stream,
-            "temperature": temperature,
+            "options": {
+                "temperature": temperature,
+                "num_gpu": 999, # Strictly force all layers to GPU to prevent CPU fallback
+                "num_ctx": 8192 # Lock context window to guarantee it fits entirely inside 12GB VRAM
+            },
             "keep_alive": keep_alive or self.default_keep_alive,
         }
         if tools:
@@ -152,6 +156,10 @@ class OllamaClient:
         payload = {
             "model": model or self.default_embed_model,
             "input": input_text,
+            "options": {
+                "num_gpu": 999,
+                "num_ctx": 8192
+            }
         }
         response = await self._request_with_retry("POST", "/embeddings", json_payload=payload)
         return response.json()
