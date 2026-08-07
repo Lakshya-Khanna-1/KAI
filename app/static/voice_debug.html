@@ -1,0 +1,432 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>KAI Voice Pipeline Studio & Debug Tool</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      --bg-color: #0b0f19;
+      --card-bg: #131b2e;
+      --border-color: #1e293b;
+      --primary: #3b82f6;
+      --primary-hover: #2563eb;
+      --success: #10b981;
+      --warning: #f59e0b;
+      --danger: #ef4444;
+      --text-main: #f8fafc;
+      --text-muted: #94a3b8;
+      --mono-font: 'JetBrains Mono', monospace;
+    }
+
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: 'Inter', sans-serif;
+      background-color: var(--bg-color);
+      color: var(--text-main);
+      padding: 2rem;
+      min-height: 100vh;
+    }
+
+    .container {
+      max-width: 1000px;
+      margin: 0 auto;
+    }
+
+    header {
+      margin-bottom: 2rem;
+      border-bottom: 1px solid var(--border-color);
+      padding-bottom: 1rem;
+    }
+
+    h1 { font-size: 1.8rem; font-weight: 700; color: var(--text-main); }
+    p.subtitle { color: var(--text-muted); font-size: 0.95rem; margin-top: 0.25rem; }
+
+    .grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 1.5rem;
+      margin-bottom: 1.5rem;
+    }
+
+    .card {
+      background: var(--card-bg);
+      border: 1px solid var(--border-color);
+      border-radius: 12px;
+      padding: 1.5rem;
+    }
+
+    .card-title {
+      font-size: 1.1rem;
+      font-weight: 600;
+      margin-bottom: 1rem;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+    }
+
+    .controls {
+      display: flex;
+      gap: 1rem;
+      align-items: center;
+      margin-bottom: 1.5rem;
+    }
+
+    button {
+      background: var(--primary);
+      color: white;
+      border: none;
+      padding: 0.75rem 1.5rem;
+      font-size: 0.95rem;
+      font-weight: 600;
+      border-radius: 8px;
+      cursor: pointer;
+      transition: background 0.2s ease;
+      display: inline-flex;
+      align-items: center;
+      gap: 0.5rem;
+    }
+
+    button:hover { background: var(--primary-hover); }
+    button:disabled { opacity: 0.5; cursor: not-allowed; }
+    button.recording { background: var(--danger); }
+
+    canvas {
+      width: 100%;
+      height: 100px;
+      background: #090d16;
+      border: 1px solid var(--border-color);
+      border-radius: 8px;
+      margin-bottom: 1rem;
+    }
+
+    .status-badge {
+      display: inline-block;
+      padding: 0.25rem 0.75rem;
+      border-radius: 9999px;
+      font-size: 0.8rem;
+      font-weight: 600;
+      font-family: var(--mono-font);
+    }
+    .badge-pass { background: rgba(16, 185, 129, 0.2); color: var(--success); }
+    .badge-warn { background: rgba(245, 158, 11, 0.2); color: var(--warning); }
+    .badge-fail { background: rgba(239, 68, 68, 0.2); color: var(--danger); }
+
+    .timing-table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 0.9rem;
+      font-family: var(--mono-font);
+    }
+
+    .timing-table th, .timing-table td {
+      padding: 0.75rem;
+      text-align: left;
+      border-bottom: 1px solid var(--border-color);
+    }
+
+    .timing-table th { color: var(--text-muted); font-weight: 500; }
+
+    .transcript-box {
+      background: #090d16;
+      border: 1px solid var(--border-color);
+      border-radius: 8px;
+      padding: 1rem;
+      min-height: 80px;
+      font-size: 0.95rem;
+      line-height: 1.5;
+      margin-bottom: 1rem;
+    }
+
+    .audio-player-box {
+      margin-top: 1rem;
+    }
+
+    audio {
+      width: 100%;
+      height: 40px;
+    }
+
+    .metric-value {
+      font-family: var(--mono-font);
+      font-size: 1.2rem;
+      font-weight: 700;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <header>
+      <h1>KAI Streaming Voice Pipeline Debug Studio</h1>
+      <p class="subtitle">Real-time WebSocket PCM streaming, Silero VAD segmentation, sentence-chunked TTS & pedalboard FX benchmark</p>
+    </header>
+
+    <div class="card" style="margin-bottom: 1.5rem;">
+      <div class="card-title">
+        <span>5-Second Audio Capture & Live VAD</span>
+        <span id="ws-status" class="status-badge badge-warn">WS Disconnected</span>
+      </div>
+
+      <div class="controls">
+        <button id="record-btn">
+          <svg width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"></path><path d="M19 10v2a7 7 0 0 1-14 0v-2"></path><line x1="12" y1="19" x2="12" y2="23"></line><line x1="8" y1="23" x2="16" y2="23"></line></svg>
+          Record 5s Turn
+        </button>
+        <span id="timer-text" style="font-family: var(--mono-font); color: var(--text-muted);">0.0s / 5.0s</span>
+      </div>
+
+      <canvas id="waveform-canvas"></canvas>
+    </div>
+
+    <div class="grid">
+      <div class="card">
+        <div class="card-title">Live Transcripts & LLM Response</div>
+        <p style="font-size: 0.8rem; color: var(--text-muted); margin-bottom: 0.5rem;">STT User Transcript:</p>
+        <div id="stt-transcript" class="transcript-box">Waiting for voice input...</div>
+        <p style="font-size: 0.8rem; color: var(--text-muted); margin-bottom: 0.5rem;">KAI Spoken Response:</p>
+        <div id="llm-response" class="transcript-box">KAI voice output will appear here...</div>
+
+        <div class="audio-player-box">
+          <p style="font-size: 0.8rem; color: var(--text-muted); margin-bottom: 0.5rem;">Synthesized TTS Audio Output (Cold Profile):</p>
+          <audio id="tts-audio-player" controls></audio>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="card-title">
+          <span>Latency Budget Waterfall</span>
+          <span id="total-badge" class="status-badge badge-pass">Target: &lt;1.2s</span>
+        </div>
+
+        <table class="timing-table">
+          <thead>
+            <tr>
+              <th>Pipeline Stage</th>
+              <th>Target</th>
+              <th>Actual</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td>Speech End &rarr; STT Transcript</td>
+              <td>400 ms</td>
+              <td id="stt-time" class="metric-value">-</td>
+            </tr>
+            <tr>
+              <td>Transcript &rarr; First Token</td>
+              <td>300 ms</td>
+              <td id="llm-time" class="metric-value">-</td>
+            </tr>
+            <tr>
+              <td>First Token &rarr; First Audio</td>
+              <td>300 ms</td>
+              <td id="tts-time" class="metric-value">-</td>
+            </tr>
+            <tr style="border-top: 2px solid var(--border-color);">
+              <td style="font-weight: 700; color: white;">TOTAL PERCEIVED LATENCY</td>
+              <td style="font-weight: 700; color: white;">1200 ms</td>
+              <td id="total-time" class="metric-value" style="color: var(--primary);">-</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    let ws = null;
+    let audioCtx = null;
+    let mediaStream = null;
+    let isRecording = false;
+
+    const recordBtn = document.getElementById('record-btn');
+    const timerText = document.getElementById('timer-text');
+    const wsStatus = document.getElementById('ws-status');
+    const sttBox = document.getElementById('stt-transcript');
+    const llmBox = document.getElementById('llm-response');
+    const audioPlayer = document.getElementById('tts-audio-player');
+    const canvas = document.getElementById('waveform-canvas');
+    const ctx = canvas.getContext('2d');
+
+    const sttTime = document.getElementById('stt-time');
+    const llmTime = document.getElementById('llm-time');
+    const ttsTime = document.getElementById('tts-time');
+    const totalTime = document.getElementById('total-time');
+    const totalBadge = document.getElementById('total-badge');
+
+    function connectWS() {
+      const loc = window.location;
+      const wsProtocol = loc.protocol === 'https:' ? 'wss:' : 'ws:';
+      const wsUrl = `${wsProtocol}//${loc.host}/voice/stream`;
+
+      ws = new WebSocket(wsUrl);
+      ws.binaryType = 'arraybuffer';
+
+      ws.onopen = () => {
+        wsStatus.textContent = 'WS Connected';
+        wsStatus.className = 'status-badge badge-pass';
+      };
+
+      ws.onclose = () => {
+        wsStatus.textContent = 'WS Disconnected';
+        wsStatus.className = 'status-badge badge-fail';
+        setTimeout(connectWS, 3000);
+      };
+
+      ws.onmessage = (event) => {
+        const msg = JSON.parse(event.data);
+        if (msg.type === 'transcript') {
+          sttBox.textContent = msg.text;
+          sttTime.textContent = `${msg.stt_ms} ms`;
+        } else if (msg.type === 'audio_chunk') {
+          llmBox.textContent += ` ${msg.sentence}`;
+          playB64Audio(msg.audio_b64, msg.sample_rate);
+        } else if (msg.type === 'turn_complete') {
+          const t = msg.timings_ms;
+          sttTime.textContent = `${t.stt} ms`;
+          llmTime.textContent = `${t.llm_first_token} ms`;
+          ttsTime.textContent = `${t.tts_first_audio} ms`;
+          totalTime.textContent = `${t.total_perceived} ms`;
+
+          if (msg.budget_exceeded) {
+            totalBadge.textContent = 'BUDGET EXCEEDED';
+            totalBadge.className = 'status-badge badge-warn';
+          } else {
+            totalBadge.textContent = 'SUB-1.2S PASS';
+            totalBadge.className = 'status-badge badge-pass';
+          }
+        }
+      };
+    }
+
+    let audioQueue = [];
+    let isPlayingAudio = false;
+
+    function playB64Audio(b64Data, sampleRate) {
+      const binary = atob(b64Data);
+      const len = binary.length;
+      const bytes = new Uint8Array(len);
+      for (let i = 0; i < len; i++) {
+        bytes[i] = binary.charCodeAt(i);
+      }
+      
+      const int16Array = new Int16Array(bytes.buffer);
+      const float32Array = new Float32Array(int16Array.length);
+      for (let i = 0; i < int16Array.length; i++) {
+        float32Array[i] = int16Array[i] / 32768.0;
+      }
+
+      if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)({ sampleRate });
+      const buffer = audioCtx.createBuffer(1, float32Array.length, sampleRate);
+      buffer.getChannelData(0).set(float32Array);
+
+      audioQueue.push(buffer);
+      if (!isPlayingAudio) processAudioQueue();
+    }
+
+    function processAudioQueue() {
+      if (audioQueue.length === 0) {
+        isPlayingAudio = false;
+        return;
+      }
+      isPlayingAudio = true;
+      const buffer = audioQueue.shift();
+      const source = audioCtx.createBufferSource();
+      source.buffer = buffer;
+      source.connect(audioCtx.destination);
+      source.onended = processAudioQueue;
+      source.start();
+    }
+
+    recordBtn.onclick = async () => {
+      if (isRecording) return;
+      isRecording = true;
+      recordBtn.classList.add('recording');
+      recordBtn.textContent = 'Recording 5s...';
+      sttBox.textContent = 'Listening...';
+      llmBox.textContent = '';
+      sttTime.textContent = '-';
+      llmTime.textContent = '-';
+      ttsTime.textContent = '-';
+      totalTime.textContent = '-';
+
+      try {
+        mediaStream = await navigator.mediaDevices.getUserMedia({ audio: { sampleRate: 16000, channelCount: 1 } });
+        if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)({ sampleRate: 16000 });
+        
+        const source = audioCtx.createMediaStreamSource(mediaStream);
+        const processor = audioCtx.createScriptProcessor(2048, 1, 1);
+        
+        let pcmChunks = [];
+        let startTime = Date.now();
+
+        processor.onaudioprocess = (e) => {
+          if (!isRecording) return;
+          const inputData = e.inputBuffer.getChannelData(0);
+          const pcm16 = new Int16Array(inputData.length);
+          for (let i = 0; i < inputData.length; i++) {
+            pcm16[i] = Math.max(-1, Math.min(1, inputData[i])) * 0x7FFF;
+          }
+          pcmChunks.push(pcm16.buffer);
+
+          // Draw Waveform
+          ctx.clearRect(0, 0, canvas.width, canvas.height);
+          ctx.fillStyle = '#3b82f6';
+          const step = Math.ceil(inputData.length / canvas.width);
+          const amp = canvas.height / 2;
+          for (let i = 0; i < canvas.width; i++) {
+            let min = 1.0, max = -1.0;
+            for (let j = 0; j < step; j++) {
+              const datum = inputData[(i * step) + j];
+              if (datum < min) min = datum;
+              if (datum > max) max = datum;
+            }
+            ctx.fillRect(i, (1 + min) * amp, 1, Math.max(1, (max - min) * amp));
+          }
+
+          const elapsed = (Date.now() - startTime) / 1000;
+          timerText.textContent = `${elapsed.toFixed(1)}s / 5.0s`;
+
+          if (elapsed >= 5.0) {
+            stopRecording(pcmChunks);
+          }
+        };
+
+        source.connect(processor);
+        processor.connect(audioCtx.destination);
+      } catch (err) {
+        alert('Microphone permission denied or unsupported: ' + err.message);
+        isRecording = false;
+        recordBtn.classList.remove('recording');
+        recordBtn.textContent = 'Record 5s Turn';
+      }
+    };
+
+    function stopRecording(pcmChunks) {
+      isRecording = false;
+      recordBtn.classList.remove('recording');
+      recordBtn.textContent = 'Processing...';
+
+      let totalLen = pcmChunks.reduce((acc, c) => acc + c.byteLength, 0);
+      let combined = new Uint8Array(totalLen);
+      let offset = 0;
+      for (let c of pcmChunks) {
+        combined.set(new Uint8Array(c), offset);
+        offset += c.byteLength;
+      }
+
+      if (ws && ws.readyState === WebSocket.OPEN) {
+        ws.send(combined.buffer);
+      }
+      setTimeout(() => {
+        recordBtn.textContent = 'Record 5s Turn';
+      }, 1000);
+    }
+
+    connectWS();
+  </script>
+</body>
+</html>

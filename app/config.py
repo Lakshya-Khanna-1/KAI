@@ -17,6 +17,9 @@ class Settings(BaseSettings):
     QDRANT_PORT: int = 6333
     WHISPER_URL: str = "http://whisper:8080"
     PIPER_URL: str = "http://piper:5000"
+    KAI_TTS_ENGINE: str = "piper"  # "piper" or "kokoro"
+    VOICE_PROFILE: str = "cold"
+    MODELS_DIR: str = "data/models"
 
     model_config = SettingsConfigDict(
         env_file=".env",

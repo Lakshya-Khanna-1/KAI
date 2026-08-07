@@ -12,3 +12,12 @@ python-dateutil
 tzdata
 qdrant-client
 python-multipart
+websockets
+soundfile
+scipy
+numpy
+pedalboard
+onnxruntime
+faster-whisper
+piper-tts
+kokoro-onnx

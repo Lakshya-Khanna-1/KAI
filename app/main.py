@@ -62,6 +62,15 @@ async def lifespan(app: FastAPI):
     from apscheduler.triggers.cron import CronTrigger
 
     init_scheduler()
+    
+    # Warm start voice pipeline (Silero VAD, Whisper STT, Piper/Kokoro TTS, Pedalboard FX)
+    try:
+        from app.services.voice.pipeline import voice_pipeline
+        voice_pipeline.warm_start()
+    except Exception as e:
+        import logging
+        logging.getLogger(__name__).error(f"Voice pipeline warm start failed: {e}")
+
     db = SessionLocal()
     try:
         await check_missed_reminders(db)

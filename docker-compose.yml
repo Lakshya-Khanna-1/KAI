@@ -9,14 +9,15 @@ services:
     environment:
       - QDRANT_HOST=qdrant
       - QDRANT_PORT=6333
+      - KAI_TTS_ENGINE=piper
+      - VOICE_PROFILE=cold
+      - MODELS_DIR=/data/models
     volumes:
       - kai_data:/data
     extra_hosts:
       - "host.docker.internal:host-gateway"
     depends_on:
       - qdrant
-      - whisper
-      - piper
     restart: unless-stopped
 
   qdrant:
@@ -27,23 +28,6 @@ services:
       - "6334:6334"
     volumes:
       - qdrant_data:/qdrant/storage
-    restart: unless-stopped
-
-  whisper:
-    image: ghcr.io/ggerganov/whisper.cpp:main
-    container_name: kai_whisper
-    ports:
-      - "8080:8080"
-    entrypoint: ["/app/build/bin/whisper-server"]
-    command: ["-m", "/app/models/ggml-base.en.bin", "--port", "8080", "--host", "0.0.0.0"]
-    restart: unless-stopped
-
-  piper:
-    image: rhasspy/wyoming-piper:latest
-    container_name: kai_piper
-    ports:
-      - "5000:5000"
-    command: ["--voice", "en_US-lessac-medium"]
     restart: unless-stopped
 
 volumes:

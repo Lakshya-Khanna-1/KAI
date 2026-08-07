@@ -12,6 +12,7 @@ from app.db.models.roadmap import Roadmap, RoadmapPhase, RoadmapTopic
 from app.db.models.gym import Workout, ExerciseSet, BodyMetric, ExercisePR
 from app.db.models.schedule import ScheduleBlock, AvailabilityRule
 from app.db.models.news import NewsItem
+from app.db.models.voice_turn import VoiceTurn
 
 __all__ = [
     "Conversation",
@@ -33,4 +34,5 @@ __all__ = [
     "ScheduleBlock",
     "AvailabilityRule",
     "NewsItem",
+    "VoiceTurn",
 ]
